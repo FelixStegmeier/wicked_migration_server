@@ -1,0 +1,9 @@
+[package]
+name = "AgamaMirgrationServer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rocket = "0.5.1"
+tempfile = "3.12.0"
+anyhow = "1.0.87"
