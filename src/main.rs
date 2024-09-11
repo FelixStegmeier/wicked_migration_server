@@ -81,14 +81,17 @@ fn do_migration(data_string: String) -> Result<String, anyhow::Error> {
         .ok_or(anyhow::anyhow!("Invalid filename"))?;
 
 
-    //sudo and skips errors
-    //let arguments_str = format!("sudo podman run -e MIGRATE_WICKED_CONTINUE_MIGRATION=true --rm -v {}:/migration-tmpdir registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/migrate-wicked-git:latest bash -c \"migrate-wicked migrate /migration-tmpdir/{} && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated\"", tmp_dir.path().to_str().unwrap().to_string(), input_path_filename);
-    let arguments_str = format!("podman run --rm -v 
+    let arguments_str = format!("run --rm -v 
     {}:/migration-tmpdir registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/migrate-wicked-git:latest 
     bash -c \"migrate-wicked migrate /migration-tmpdir/{} && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated\"", tmp_dir.path().to_str().unwrap().to_string(), input_path_filename);
     
     let arg_parser = Shlex::new(&arguments_str);
-    Command::new("sudo").args(arg_parser).output()?;
+    Command::new("podman").args(arg_parser).output()?;
+
+    
+    //sudo and skips errors
+    //let arguments_str = format!("podman run -e MIGRATE_WICKED_CONTINUE_MIGRATION=true --rm -v {}:/migration-tmpdir registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/migrate-wicked-git:latest bash -c \"migrate-wicked migrate /migration-tmpdir/{} && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated\"", tmp_dir.path().to_str().unwrap().to_string(), input_path_filename);
+    //Command::new("sudo").args(arg_parser).output()?;
 
     //sudo and skips errors
     // Command::new("sudo").args([
