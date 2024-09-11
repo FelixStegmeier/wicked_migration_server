@@ -59,37 +59,67 @@ fn rocket() -> Rocket<Build> {
 fn do_migration(data_string: String) -> Result<String, anyhow::Error> {
     let tmp_dir: tempfile::TempDir = tempdir()?;
 
-    let file_path = tmp_dir.path().to_str().unwrap();
+    //let file_path = tmp_dir.path().to_str().unwrap();
 
-    let path = tempfile::Builder::new()
+    let input_tmpfile: tempfile::NamedTempFile = tempfile::Builder::new()
         .suffix(".xml")
         .tempfile_in(tmp_dir.path())?;
 
-    std::fs::write(&path, data_string.as_bytes())?;
+    std::fs::write(&input_tmpfile, data_string.as_bytes())?;
 
-    let target_file = tempfile::Builder::new()
+    let output_tmpfile: tempfile::NamedTempFile = tempfile::Builder::new()
         .prefix("nm-migrated.")
         .suffix(".tar")
         .keep(true)
         .tempfile()?;
-    let target_path_str = target_file.path().to_str().unwrap();
+    let output_path_str:&str = output_tmpfile.path().to_str().unwrap();
 
-    let path_filename = path
+    let input_path_filename:&str = input_tmpfile
         .path()
         .file_name()
         .ok_or(anyhow::anyhow!("Invalid filename"))?
         .to_str()
         .ok_or(anyhow::anyhow!("Invalid filename"))?;
 
+
+    //podman run --rm -v /tmp/$tempdir:/migration-tmpdir registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/migrate-wicked-git:latest \
+    //   bash -c "migrate-wicked migrate /migration-tmpdir/tmp.xml && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated"
+    Command::new("podman")
+    .args([
+        "run",
+        "-rm",
+        "-v",
+        &(tmp_dir.path().to_str().unwrap().to_string() + ":/migration-tmpdir registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/migrate-wicked-git:latest"),
+        "bash",
+        "-c",
+        &("migrate-wicked migrate /migration-tmpdir".to_string() + input_path_filename + "&& cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated"),
+    ])
+    .output()?;
+
+    //tar sollte passen?
     Command::new("tar")
         .args([
             "cf",
-            target_path_str,
+            output_path_str,
             "-C",
             tmp_dir.path().to_str().unwrap(),
-            path_filename,
+            input_path_filename,
         ])
         .output()?;
-    println!("{}", target_path_str);
-    Ok(target_file.path().file_name().unwrap().to_str().unwrap().to_string())
+
+    
+    
+
+
+    // Command::new("tar")
+    //     .args([
+    //         "cf",
+    //         target_path_str,
+    //         "-C",
+    //         tmp_dir.path().to_str().unwrap(),
+    //         path_filename,
+    //     ])
+    //     .output()?;
+    println!("{}", output_path_str);
+    Ok(output_tmpfile.path().file_name().unwrap().to_str().unwrap().to_string())
 }
