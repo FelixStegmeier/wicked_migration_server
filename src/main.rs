@@ -5,6 +5,7 @@ use rocket::http::Status;
 use rocket::response::status;
 use rocket::Build;
 use rocket::Rocket;
+use shlex::Shlex;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::{self, tempdir};
@@ -59,8 +60,6 @@ fn rocket() -> Rocket<Build> {
 fn do_migration(data_string: String) -> Result<String, anyhow::Error> {
     let tmp_dir: tempfile::TempDir = tempdir()?;
 
-    //let file_path = tmp_dir.path().to_str().unwrap();
-
     let input_tmpfile: tempfile::NamedTempFile = tempfile::Builder::new()
         .suffix(".xml")
         .tempfile_in(tmp_dir.path())?;
@@ -72,9 +71,9 @@ fn do_migration(data_string: String) -> Result<String, anyhow::Error> {
         .suffix(".tar")
         .keep(true)
         .tempfile()?;
-    let output_path_str:&str = output_tmpfile.path().to_str().unwrap();
+    let output_path_str: &str = output_tmpfile.path().to_str().unwrap();
 
-    let input_path_filename:&str = input_tmpfile
+    let input_path_filename: &str = input_tmpfile
         .path()
         .file_name()
         .ok_or(anyhow::anyhow!("Invalid filename"))?
@@ -82,21 +81,45 @@ fn do_migration(data_string: String) -> Result<String, anyhow::Error> {
         .ok_or(anyhow::anyhow!("Invalid filename"))?;
 
 
-    //podman run --rm -v /tmp/$tempdir:/migration-tmpdir registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/migrate-wicked-git:latest \
-    //   bash -c "migrate-wicked migrate /migration-tmpdir/tmp.xml && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated"
-    Command::new("podman")
-    .args([
-        "run",
-        "-rm",
-        "-v",
-        &(tmp_dir.path().to_str().unwrap().to_string() + ":/migration-tmpdir registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/migrate-wicked-git:latest"),
-        "bash",
-        "-c",
-        &("migrate-wicked migrate /migration-tmpdir".to_string() + input_path_filename + "&& cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated"),
-    ])
-    .output()?;
+    //sudo and skips errors
+    //let arguments_str = format!("sudo podman run -e MIGRATE_WICKED_CONTINUE_MIGRATION=true --rm -v {}:/migration-tmpdir registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/migrate-wicked-git:latest bash -c \"migrate-wicked migrate /migration-tmpdir/{} && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated\"", tmp_dir.path().to_str().unwrap().to_string(), input_path_filename);
+    let arguments_str = format!("podman run --rm -v 
+    {}:/migration-tmpdir registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/migrate-wicked-git:latest 
+    bash -c \"migrate-wicked migrate /migration-tmpdir/{} && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated\"", tmp_dir.path().to_str().unwrap().to_string(), input_path_filename);
+    
+    let arg_parser = Shlex::new(&arguments_str);
+    Command::new("sudo").args(arg_parser).output()?;
 
-    //tar sollte passen?
+    //sudo and skips errors
+    // Command::new("sudo").args([
+    //     "podman",
+    //     "run",
+    //     "-e",
+    //     "MIGRATE_WICKED_CONTINUE_MIGRATION=true",
+    //     "--rm",
+    //     "-v",
+    //     format!("{}:/migration-tmpdir", tmp_dir.path().to_str().unwrap().to_string()).as_str(),
+    //     "registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/migrate-wicked-git:latest",
+    //     "bash",
+    //     "-c",
+    //     format!("migrate-wicked migrate /migration-tmpdir/{}&& cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated",input_path_filename).as_str()
+    // ])
+    // .output()?;
+
+    // Command::new("podman").args([
+    //     "run",
+    //     "--rm",
+    //     "-v",
+    //     format!("{}:/migration-tmpdir", tmp_dir.path().to_str().unwrap().to_string()).as_str(),
+    //     "registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/migrate-wicked-git:latest",
+    //     "bash",
+    //     "-c",
+    //     format!("migrate-wicked migrate /migration-tmpdir/{}&& cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated",input_path_filename).as_str()
+    // ])
+    // .output()?;
+
+
+
     Command::new("tar")
         .args([
             "cf",
@@ -107,19 +130,12 @@ fn do_migration(data_string: String) -> Result<String, anyhow::Error> {
         ])
         .output()?;
 
-    
-    
-
-
-    // Command::new("tar")
-    //     .args([
-    //         "cf",
-    //         target_path_str,
-    //         "-C",
-    //         tmp_dir.path().to_str().unwrap(),
-    //         path_filename,
-    //     ])
-    //     .output()?;
     println!("{}", output_path_str);
-    Ok(output_tmpfile.path().file_name().unwrap().to_str().unwrap().to_string())
+    Ok(output_tmpfile
+        .path()
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string())
 }
