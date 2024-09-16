@@ -1,18 +1,18 @@
 #[macro_use]
 extern crate rocket;
 use core::time;
-use std::alloc::System;
-use rocket::data::{Data, ToByteUnit};
+use rocket::data::{self, Data, ToByteUnit};
 use rocket::futures::future::Shared;
 use rocket::http::Status;
 use rocket::response::status;
 use rocket::Build;
 use rocket::Rocket;
-use rusqlite::{Connection, Result};
+use rusqlite::{Connection, Result, Row};
+use std::alloc::System;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use tempfile::{self, tempdir};
 use std::time::SystemTime;
+use tempfile::{self, tempdir};
 //use std::sync::{Arc, Mutex};
 use rand::Rng;
 use rusqlite::params;
@@ -21,20 +21,52 @@ use tokio::sync::Mutex;
 
 const REGISTRY_URL:&str = "registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/migrate-wicked-git:latest";
 const TABLE_NAME: &str = "entries";
-const TIME_FORMAT:&str = "%Y-%m-%d %H:%M:%S";
+const TIME_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 
 //in Post file zurückgeben
 //sqlite table mit id, filepath, timestamp oder einfach löschen, wenn der Verweis weg ist
 //richtiges File zurückgeben
 
-struct state {
+struct entry {
     id: String,
     file_path: String,
     creation_time: String,
 }
 
+//Errors handlen, Felix!
+fn get_row(id_s: &str, database: &Connection) -> Result<entry>{
+    let mut select_stmt = database
+    .prepare(format!("SELECT id, file_path, creation_time FROM {} WHERE id = (?1)", TABLE_NAME).as_str())?;
+
+    let mut rows = select_stmt
+        .query_map([&id_s], |row| {
+            Ok(entry {
+                id: row.get(0)?,
+                file_path: row.get(1)?,
+                creation_time: row.get(2)?,
+            })
+        })?;
+    let row = rows.nth(0).unwrap()?;//was ist hier der korrekte Weg das option None zu handlen?
+    Ok(row)
+}
+
 #[get("/<path>")]
-async fn return_config_file(path: PathBuf) -> status::Custom<String> {
+async fn return_config_file(
+    path: PathBuf,
+    shared_state: &rocket::State<Arc<Mutex<rusqlite::Connection>>>,
+) -> status::Custom<String> {
+    //path = id in DB und holt file_path aus DB
+    let database = shared_state.lock().await;
+
+    let id_s = path.file_name().unwrap().to_str().unwrap();
+
+    let row = get_row(&id_s, &database).unwrap();///ERRORS, FELIX
+    //println!("{}", row.file_path);
+    
+    //////////////////////////////////////////////////////
+
+    let path = row.file_path;
+
     let file_contents = match get_file_contents(Path::new("/tmp/").join(path)) {
         Ok(file_contents) => file_contents,
         Err(e) => {
@@ -78,33 +110,28 @@ async fn receive_data(
         }
     };
 
-    let id = rand::thread_rng().gen_range(0..10000);
+    let id = rand::thread_rng().gen_range(0..1000000000);
     let time: String = chrono::Local::now().format(TIME_FORMAT).to_string();
-    let id_s = format!("{:0>4}", id);
-    database.execute(format!(
-        "SELECT EXISTS(SELECT 1 FROM {} WHERE (?1) = '{}')",
-        TABLE_NAME, id_s
-    ).as_str(), &[&id_s])
-    .unwrap();
+    let id_s = format!("{:0>9}", id);
 
-    //let mut stmt = a.prepare(format!("SELECT EXISTS(SELECT 1 FROM {} WHERE id = ?)", TABLE_NAME).as_str()).unwrap();
-    //let exists: bool = stmt.query_row(params![id_s], |row| row.get(0)).unwrap();
-    //println!("{}", exists);
+    let mut add_stmt = database
+        .prepare(
+            format!(
+                "INSERT INTO {} (id, file_path, creation_time) VALUES (?1, ?2, ?3)",
+                TABLE_NAME
+            )
+            .as_str(),
+        )
+        .unwrap();
+    add_stmt.execute([&id_s, &path, &time]);
 
-    let query = format!("SELECT EXISTS(SELECT 1 FROM {} WHERE id =  1)", TABLE_NAME);
-
-    let exists: bool = database
-        .query_row(&query, params![id_s], |row| row.get(0))
-        .unwrap_or(false); // returns false if an error occurs
-    println!("id exists in database: {}", exists);
-    
-    let mut stmt = database
+    let mut select_stmt = database
         .prepare(format!("SELECT id, file_path, creation_time FROM {}", TABLE_NAME).as_str())
         .unwrap();
 
-    let rows = stmt
+    let rows = select_stmt
         .query_map([], |row| {
-            Ok(state {
+            Ok(entry {
                 id: row.get(0)?,
                 file_path: row.get(1)?,
                 creation_time: row.get(2)?,
@@ -114,11 +141,28 @@ async fn receive_data(
 
     for row in rows {
         let r = row.unwrap();
-        println!("id: {}\nfile_path: {}\ncreation_time: {}", r.id, r.file_path, r.creation_time);
+        println!(
+            "id: {}\nfile_path: {}\ncreation_time: {}",
+            r.id, r.file_path, r.creation_time
+        );
     }
-    //
 
-    status::Custom(Status::Created, path)
+    let mut query_exists_stmt = database
+        .prepare(format!("SELECT id FROM {} WHERE id = (?1)", TABLE_NAME).as_str())
+        .unwrap();
+    let query_result = query_exists_stmt.query([&id_s]).unwrap();
+
+    let a = query_result.mapped(|row| {
+        Ok(entry {
+            id: row.get(0)?,
+            file_path: row.get(1)?,
+            creation_time: row.get(2)?,
+        })
+    });
+    println!("number of entries: {}", a.count());
+
+    status::Custom(Status::Created, id_s)
+    //status::Custom(Status::Created, path)
 }
 
 #[post("/alternative_post", data = "<data>")]
@@ -218,7 +262,13 @@ fn do_migration(data_string: String) -> Result<String, anyhow::Error> {
         .output()?;
 
     println!("output_path_str: {}", output_path_str);
-    Ok(output_tmpfile.path().file_name().unwrap().to_str().unwrap().to_string())
+    Ok(output_tmpfile
+        .path()
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string())
 }
 
 #[launch]
