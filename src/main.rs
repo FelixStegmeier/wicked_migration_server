@@ -18,9 +18,6 @@ const REGISTRY_URL:&str = "registry.opensuse.org/home/jcronenberg/migrate-wicked
 const TABLE_NAME: &str = "entries";
 const TIME_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 
-//in Post file zurückgeben
-//sqlite table mit id, filepath, timestamp oder einfach löschen, wenn der Verweis weg ist
-//richtiges File zurückgeben
 
 struct Entry {
     id: String,
@@ -162,11 +159,40 @@ async fn receive_data(
     };
 
     status::Custom(Status::Created, id_s)
+    //Redirect::to(format!("/{}", id_s))
     //status::Custom(Status::Created, path)
 }
 
-#[post("/alternative_post", data = "<data>")]
-async fn receive_and_return_data(data: Data<'_>) -> status::Custom<String> //RawHtml<&'static str>
+#[post("/download", data = "<data>")]
+async fn redirect(
+    data: Data<'_>,
+    shared_state: &rocket::State<Arc<Mutex<rusqlite::Connection>>>,
+){
+    let data_string: rocket::data::Capped<String> =
+        match data.open(10.mebibytes()).into_string().await {
+            Ok(str) => str,
+            Err(e) => {
+                println!("Error when retrieving data: {e}");
+                panic!()
+            }
+        };
+
+    let database: tokio::sync::MutexGuard<'_, Connection> = shared_state.lock().await;
+
+    let path = match migrate(data_string.to_string()) {
+        Ok(path) => path,
+        Err(e) => panic!()
+    };
+
+    let id_s = match create_and_add_row(path, &database) {
+        Ok(id_s) => id_s,
+        Err(e) => {panic!()}
+    };
+    rocket::response::Redirect::to(format!("/{}", id_s));
+}
+
+#[post("/immediate_response", data = "<data>")]
+async fn immediate_response(data: Data<'_>) -> status::Custom<String> //RawHtml<&'static str>
 {
     let data_string: rocket::data::Capped<String> =
         match data.open(10.mebibytes()).into_string().await {
@@ -273,7 +299,7 @@ fn migrate(data_string: String) -> Result<String, anyhow::Error> {
 
 #[launch]
 fn rocket() -> Rocket<Build> {
-    let database = Connection::open_in_memory().unwrap(); //error handling, Felix... Error handling
+    let database = Connection::open_in_memory().unwrap();
     database
         .execute(
             format!(
@@ -285,7 +311,7 @@ fn rocket() -> Rocket<Build> {
                 TABLE_NAME
             )
             .as_str(),
-            (), // empty list of parameters.
+            (),
         )
         .unwrap();
 
@@ -294,7 +320,7 @@ fn rocket() -> Rocket<Build> {
     rocket::build()
         .mount(
             "/",
-            routes![receive_data, return_config_file, receive_and_return_data],
+            routes![receive_data, return_config_file, immediate_response, redirect],
         )
         .manage(db_data)
 }
