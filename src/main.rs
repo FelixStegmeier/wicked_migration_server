@@ -18,23 +18,23 @@ const TABLE_NAME: &str = "entries";
 const TIME_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 
 struct Entry {
-    _id: String,
+    uuid: String,
     file_path: String,
     _creation_time: String,
 }
 
-fn get_row(id_s: &str, database: &Connection) -> rusqlite::Result<Entry> {
+fn get_row(uuid: &str, database: &Connection) -> rusqlite::Result<Entry> {
     let mut select_stmt = database.prepare(
         format!(
-            "SELECT id, file_path, creation_time FROM {} WHERE id = (?1)",
+            "SELECT uuid, file_path, creation_time FROM {} WHERE uuid = (?1)",
             TABLE_NAME
         )
         .as_str(),
     )?;
 
-    let row = select_stmt.query_row([&id_s], |row| {
+    let row = select_stmt.query_row([&uuid], |row| {
         Ok(Entry {
-            _id: row.get(0)?,
+            uuid: row.get(0)?,
             file_path: row.get(1)?,
             _creation_time: row.get(2)?,
         })
@@ -58,6 +58,7 @@ async fn return_config_file(
             )
         }
     };
+
     drop(database);
 
     let file_contents = match get_file_contents(Path::new("/tmp/").join(row.file_path)) {
@@ -77,14 +78,15 @@ fn get_file_contents(path: PathBuf) -> Result<String, anyhow::Error> {
     Ok(contents.to_string())
 }
 
-fn id_exists_in_table(id_s: &str, database: &Connection) -> rusqlite::Result<bool> {
+fn uuid_exists_in_table(uuid: &str, database: &Connection) -> rusqlite::Result<bool> {
     let mut query_exists_stmt =
-        database.prepare(format!("SELECT id FROM {} WHERE id = (?1)", TABLE_NAME).as_str())?;
-    let query_result = query_exists_stmt.query([&id_s])?;
+        database.prepare(format!("SELECT uuid FROM {} WHERE uuid = (?1)", TABLE_NAME).as_str())?;
+    let query_result = query_exists_stmt.query([&uuid])?;
 
     let rows = query_result.mapped(|row| {
         Ok(Entry {
-            _id: row.get(0)?,
+
+            uuid: row.get(0)?,
             file_path: row.get(1)?,
             _creation_time: row.get(2)?,
         })
@@ -93,24 +95,22 @@ fn id_exists_in_table(id_s: &str, database: &Connection) -> rusqlite::Result<boo
 }
 
 fn create_and_add_row(path: String, database: &Connection) -> rusqlite::Result<String> {
-    let mut id = rand::thread_rng().gen_range(0..1000000000);
-    let mut id_s = format!("{:0>9}", id);
+    let mut uuid = uuid::Uuid::new_v4().to_string();
 
-    while id_exists_in_table(&id_s, database)? {
-        id = rand::thread_rng().gen_range(0..1000000000);
-        id_s = format!("{:0>9}", id);
+    while uuid_exists_in_table(&uuid, &database)? {
+        uuid = uuid::Uuid::new_v4().to_string();
     }
     let time: String = chrono::Local::now().format(TIME_FORMAT).to_string();
 
     let mut add_stmt = database.prepare(
         format!(
-            "INSERT INTO {} (id, file_path, creation_time) VALUES (?1, ?2, ?3)",
+            "INSERT INTO {} (uuid, file_path, creation_time) VALUES (?1, ?2, ?3)",
             TABLE_NAME
         )
         .as_str(),
     )?;
-    add_stmt.execute([&id_s, &path, &time])?;
-    Ok(id_s)
+    add_stmt.execute([&uuid, &path, &time])?;
+    Ok(uuid)
 }
 
 #[post("/", data = "<data>")]
@@ -137,10 +137,11 @@ async fn receive_data(
         }
     };
 
+
     let database: tokio::sync::MutexGuard<'_, Connection> = shared_state.lock().await;
 
-    let id_s = match create_and_add_row(path, &database) {
-        Ok(id_s) => id_s,
+    let uuid = match create_and_add_row(path, &database) {
+        Ok(uuid) => uuid,
         Err(e) => {
             return status::Custom(
                 Status::BadRequest,
@@ -149,8 +150,7 @@ async fn receive_data(
         }
     };
     drop(database);
-
-    status::Custom(Status::Created, id_s)
+    status::Custom(Status::Created, uuid)
 }
 
 #[post("/download", data = "<data>")]
@@ -181,8 +181,8 @@ async fn redirect(
         }
     };
 
-    let id_s = match create_and_add_row(path, &database) {
-        Ok(id_s) => id_s,
+    let uuid = match create_and_add_row(path, &database) {
+        Ok(uuid) => uuid,
         Err(e) => {
             return Err(status::Custom(
                 Status::InternalServerError,
@@ -190,7 +190,7 @@ async fn redirect(
             ))
         }
     };
-    Ok(rocket::response::Redirect::to(format!("/{}", id_s)))
+    Ok(rocket::response::Redirect::to(format!("/{}", uuid)))
 }
 
 fn migrate(data_string: String) -> Result<String, anyhow::Error> {
@@ -243,6 +243,7 @@ fn migrate(data_string: String) -> Result<String, anyhow::Error> {
     Command::new("tar")
         .args(["cf", output_path_str, "-C", &migrated_file_location, "."])
         .output()?;
+
     Ok(output_path_str.to_string())
 }
 
@@ -253,10 +254,10 @@ fn rocket() -> Rocket<Build> {
         .execute(
             format!(
                 "CREATE TABLE IF NOT EXISTS {} (
-                id TEXT PRIMARY KEY,
+                uuid TEXT PRIMARY KEY,
                 file_path TEXT NOT NULL,
                 creation_time TEXT
-            )",
+                )",
                 TABLE_NAME
             )
             .as_str(),
