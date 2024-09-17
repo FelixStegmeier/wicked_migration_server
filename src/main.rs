@@ -5,7 +5,7 @@ use rocket::http::Status;
 use rocket::response::status;
 use rocket::Build;
 use rocket::Rocket;
-use rusqlite::{Connection, Result};
+use rusqlite::Connection;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::{self, tempdir};
@@ -18,14 +18,13 @@ const REGISTRY_URL:&str = "registry.opensuse.org/home/jcronenberg/migrate-wicked
 const TABLE_NAME: &str = "entries";
 const TIME_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 
-
 struct Entry {
     id: String,
     file_path: String,
     creation_time: String,
 }
 
-fn get_row(id_s: &str, database: &Connection) -> Result<Entry> {
+fn get_row(id_s: &str, database: &Connection) -> rusqlite::Result<Entry> {
     let mut select_stmt = database.prepare(
         format!(
             "SELECT id, file_path, creation_time FROM {} WHERE id = (?1)",
@@ -34,14 +33,13 @@ fn get_row(id_s: &str, database: &Connection) -> Result<Entry> {
         .as_str(),
     )?;
 
-    let mut rows = select_stmt.query_map([&id_s], |row| {
+    let row = select_stmt.query_row([&id_s], |row| {
         Ok(Entry {
             id: row.get(0)?,
             file_path: row.get(1)?,
             creation_time: row.get(2)?,
         })
     })?;
-    let row = rows.nth(0).unwrap()?; //was ist hier der korrekte Weg das option None zu handlen?
     Ok(row)
 }
 
@@ -86,7 +84,9 @@ fn get_file_contents(path: PathBuf) -> Result<String, anyhow::Error> {
     let contents = std::fs::read_to_string(path)?;
     Ok(contents.to_string())
 }
-fn id_exists_in_table(id_s: &str, database: &Connection) -> Result<bool> {
+
+// replace with UUID
+fn id_exists_in_table(id_s: &str, database: &Connection) -> rusqlite::Result<bool> {
     let mut query_exists_stmt =
         database.prepare(format!("SELECT id FROM {} WHERE id = (?1)", TABLE_NAME).as_str())?;
     let query_result = query_exists_stmt.query([&id_s])?;
@@ -101,7 +101,7 @@ fn id_exists_in_table(id_s: &str, database: &Connection) -> Result<bool> {
     Ok(if rows.count() > 0 { true } else { false })
 }
 
-fn create_and_add_row(path: String, database: &Connection) -> Result<String> {
+fn create_and_add_row(path: String, database: &Connection) -> rusqlite::Result<String> {
     let mut id = rand::thread_rng().gen_range(0..1000000000);
     let mut id_s = format!("{:0>9}", id);
 
@@ -159,7 +159,6 @@ async fn receive_data(
     };
 
     status::Custom(Status::Created, id_s)
-    //Redirect::to(format!("/{}", id_s))
     //status::Custom(Status::Created, path)
 }
 
@@ -167,13 +166,12 @@ async fn receive_data(
 async fn redirect(
     data: Data<'_>,
     shared_state: &rocket::State<Arc<Mutex<rusqlite::Connection>>>,
-) -> rocket::response::Redirect{
+) -> Result<rocket::response::Redirect, status::Custom<String>> {
     let data_string: rocket::data::Capped<String> =
         match data.open(10.mebibytes()).into_string().await {
             Ok(str) => str,
             Err(e) => {
-                println!("Error when retrieving data: {e}");
-                panic!()
+                return Err(status::Custom(Status::InternalServerError, format!("Error when retrieving data: {}", e)))
             }
         };
 
@@ -181,50 +179,18 @@ async fn redirect(
 
     let path = match migrate(data_string.to_string()) {
         Ok(path) => path,
-        Err(e) => panic!()
+        Err(e) => {
+            return Err(status::Custom(Status::InternalServerError, format!("Error when migrating: {}", e)))
+        }
     };
 
     let id_s = match create_and_add_row(path, &database) {
         Ok(id_s) => id_s,
-        Err(e) => {panic!()}
-    };
-
-    //rocket::response::Redirect::to(uri!(return_config_file: id_s))
-    rocket::response::Redirect::to(format!("/{}", id_s))
-}
-
-#[post("/immediate_response", data = "<data>")]
-async fn immediate_response(data: Data<'_>) -> status::Custom<String> //RawHtml<&'static str>
-{
-    let data_string: rocket::data::Capped<String> =
-        match data.open(10.mebibytes()).into_string().await {
-            Ok(str) => str,
-            Err(e) => {
-                println!("Error when retrieving data: {e}");
-                return status::Custom(
-                    Status::BadRequest,
-                    format!("Error when receiving data: {}", e),
-                );
-            }
-        };
-    let path = match migrate(data_string.to_string()) {
-        Ok(path) => path,
         Err(e) => {
-            return status::Custom(Status::BadRequest, format!("Error failed migration: {}", e))
+            return Err(status::Custom(Status::InternalServerError, format!("Error when creating database: {}", e)))
         }
     };
-
-    let file_contents = match get_file_contents(Path::new("/tmp/").join(path)) {
-        Ok(file_contents) => file_contents,
-        Err(e) => {
-            return status::Custom(
-                Status::BadRequest,
-                format!("Error when attempting to access and read file: {}", e),
-            )
-        }
-    };
-    println!("file_contents: {}", file_contents);
-    status::Custom(Status::Ok, file_contents)
+    Ok(rocket::response::Redirect::to(format!("/{}", id_s)))
 }
 
 fn migrate(data_string: String) -> Result<String, anyhow::Error> {
@@ -252,7 +218,7 @@ fn migrate(data_string: String) -> Result<String, anyhow::Error> {
 
     //-e MIGRATE_WICKED_CONTINUE_MIGRATION=true
     let arguments_str = format!("run --rm -v {}:/migration-tmpdir:z {} bash -c 
-        \"migrate-wicked migrate /migration-tmpdir/{} && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated\"", 
+        \"migrate-wicked migrate -c /migration-tmpdir/{} && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated\"", 
         tmp_dir.path().display().to_string(),
         REGISTRY_URL,
         input_path_filename
@@ -275,7 +241,7 @@ fn migrate(data_string: String) -> Result<String, anyhow::Error> {
 
     //  /tmp/$tmpdir/NM-migrated, ich weiß nicht, ob das der richtige Path ist
     let migrated_file_location =
-        format!("/tmp/{}/NM-migrated", tmp_dir.path().display().to_string()).to_string();
+        format!("{}/NM-migrated", tmp_dir.path().display().to_string()).to_string();
 
     Command::new("tar")
         .args([
@@ -286,17 +252,16 @@ fn migrate(data_string: String) -> Result<String, anyhow::Error> {
             // tmp_dir.path().to_str().unwrap(),
             &migrated_file_location,
             // input_path_filename,
+            ".",
         ])
         .output()?;
+    let ls_cmd = Command::new("ls").args([&migrated_file_location]).output()?;
+    println!("ls: {}", String::from_utf8_lossy(&ls_cmd.stdout));
+
 
     println!("output_path_str: {}", output_path_str);
-    Ok(output_tmpfile
-        .path()
-        .file_name()
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .to_string())
+    Err(anyhow::anyhow!("testing"))
+    //Ok(output_path_str.to_string())
 }
 
 #[launch]
@@ -322,7 +287,11 @@ fn rocket() -> Rocket<Build> {
     rocket::build()
         .mount(
             "/",
-            routes![receive_data, return_config_file, immediate_response, redirect],
+            routes![
+                receive_data,
+                return_config_file,
+                redirect
+            ],
         )
         .manage(db_data)
 }
