@@ -9,7 +9,6 @@ use rusqlite::Connection;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::{self, tempdir};
-//use std::sync::{Arc, Mutex};
 use rand::Rng;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -19,9 +18,9 @@ const TABLE_NAME: &str = "entries";
 const TIME_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
 
 struct Entry {
-    id: String,
+    _id: String,
     file_path: String,
-    creation_time: String,
+    _creation_time: String,
 }
 
 fn get_row(id_s: &str, database: &Connection) -> rusqlite::Result<Entry> {
@@ -35,9 +34,9 @@ fn get_row(id_s: &str, database: &Connection) -> rusqlite::Result<Entry> {
 
     let row = select_stmt.query_row([&id_s], |row| {
         Ok(Entry {
-            id: row.get(0)?,
+            _id: row.get(0)?,
             file_path: row.get(1)?,
-            creation_time: row.get(2)?,
+            _creation_time: row.get(2)?,
         })
     })?;
     Ok(row)
@@ -48,12 +47,9 @@ async fn return_config_file(
     path: PathBuf,
     shared_state: &rocket::State<Arc<Mutex<rusqlite::Connection>>>,
 ) -> status::Custom<String> {
-    //path = id in DB und holt file_path aus DB
     let database = shared_state.lock().await;
 
-    let id_s = path.file_name().unwrap().to_str().unwrap();
-
-    let row = match get_row(&id_s, &database) {
+    let row = match get_row(&path.display().to_string(), &database) {
         Ok(row) => row,
         Err(e) => {
             return status::Custom(
@@ -62,13 +58,9 @@ async fn return_config_file(
             )
         }
     };
-    //println!("{}", row.file_path);
+    drop(database);
 
-    //////////////////////////////////////////////////////
-
-    let path = row.file_path;
-
-    let file_contents = match get_file_contents(Path::new("/tmp/").join(path)) {
+    let file_contents = match get_file_contents(Path::new("/tmp/").join(row.file_path)) {
         Ok(file_contents) => file_contents,
         Err(e) => {
             return status::Custom(
@@ -85,7 +77,6 @@ fn get_file_contents(path: PathBuf) -> Result<String, anyhow::Error> {
     Ok(contents.to_string())
 }
 
-// replace with UUID
 fn id_exists_in_table(id_s: &str, database: &Connection) -> rusqlite::Result<bool> {
     let mut query_exists_stmt =
         database.prepare(format!("SELECT id FROM {} WHERE id = (?1)", TABLE_NAME).as_str())?;
@@ -93,9 +84,9 @@ fn id_exists_in_table(id_s: &str, database: &Connection) -> rusqlite::Result<boo
 
     let rows = query_result.mapped(|row| {
         Ok(Entry {
-            id: row.get(0)?,
+            _id: row.get(0)?,
             file_path: row.get(1)?,
-            creation_time: row.get(2)?,
+            _creation_time: row.get(2)?,
         })
     });
     Ok(if rows.count() > 0 { true } else { false })
@@ -139,14 +130,14 @@ async fn receive_data(
             }
         };
 
-    let database: tokio::sync::MutexGuard<'_, Connection> = shared_state.lock().await;
-
     let path = match migrate(data_string.to_string()) {
         Ok(path) => path,
         Err(e) => {
             return status::Custom(Status::BadRequest, format!("Error failed migration: {}", e))
         }
     };
+
+    let database: tokio::sync::MutexGuard<'_, Connection> = shared_state.lock().await;
 
     let id_s = match create_and_add_row(path, &database) {
         Ok(id_s) => id_s,
@@ -157,9 +148,9 @@ async fn receive_data(
             )
         }
     };
+    drop(database);
 
     status::Custom(Status::Created, id_s)
-    //status::Custom(Status::Created, path)
 }
 
 #[post("/download", data = "<data>")]
@@ -216,7 +207,6 @@ fn migrate(data_string: String) -> Result<String, anyhow::Error> {
         .to_str()
         .ok_or(anyhow::anyhow!("Invalid filename"))?;
 
-    //-e MIGRATE_WICKED_CONTINUE_MIGRATION=true
     let arguments_str = format!("run --rm -v {}:/migration-tmpdir:z {} bash -c 
         \"migrate-wicked migrate -c /migration-tmpdir/{} && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated\"", 
         tmp_dir.path().display().to_string(),
@@ -239,29 +229,19 @@ fn migrate(data_string: String) -> Result<String, anyhow::Error> {
         );
     }
 
-    //  /tmp/$tmpdir/NM-migrated, ich weiß nicht, ob das der richtige Path ist
     let migrated_file_location =
-        format!("{}/NM-migrated", tmp_dir.path().display().to_string()).to_string();
+        format!("{}/NM-migrated", tmp_dir.path().display());
 
     Command::new("tar")
         .args([
             "cf",
             output_path_str,
-            //&format!("/migration-tmpdir/NM-migrated/"),
             "-C",
-            // tmp_dir.path().to_str().unwrap(),
             &migrated_file_location,
-            // input_path_filename,
             ".",
         ])
         .output()?;
-    let ls_cmd = Command::new("ls").args([&migrated_file_location]).output()?;
-    println!("ls: {}", String::from_utf8_lossy(&ls_cmd.stdout));
-
-
-    println!("output_path_str: {}", output_path_str);
     Err(anyhow::anyhow!("testing"))
-    //Ok(output_path_str.to_string())
 }
 
 #[launch]
@@ -271,10 +251,10 @@ fn rocket() -> Rocket<Build> {
         .execute(
             format!(
                 "CREATE TABLE IF NOT EXISTS {} (
-            id TEXT PRIMARY KEY,
-            file_path TEXT NOT NULL,
-            creation_time TEXT
-        )",
+                id TEXT PRIMARY KEY,
+                file_path TEXT NOT NULL,
+                creation_time TEXT
+            )",
                 TABLE_NAME
             )
             .as_str(),
