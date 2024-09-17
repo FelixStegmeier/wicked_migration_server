@@ -167,7 +167,7 @@ async fn receive_data(
 async fn redirect(
     data: Data<'_>,
     shared_state: &rocket::State<Arc<Mutex<rusqlite::Connection>>>,
-){
+) -> rocket::response::Redirect{
     let data_string: rocket::data::Capped<String> =
         match data.open(10.mebibytes()).into_string().await {
             Ok(str) => str,
@@ -188,7 +188,9 @@ async fn redirect(
         Ok(id_s) => id_s,
         Err(e) => {panic!()}
     };
-    rocket::response::Redirect::to(format!("/{}", id_s));
+
+    //rocket::response::Redirect::to(uri!(return_config_file: id_s))
+    rocket::response::Redirect::to(format!("/{}", id_s))
 }
 
 #[post("/immediate_response", data = "<data>")]
