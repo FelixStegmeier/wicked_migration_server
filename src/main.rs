@@ -4,8 +4,6 @@ use rand::Rng;
 use rocket::data::{Data, ToByteUnit};
 use rocket::http::Status;
 use rocket::response::status;
-use rocket::Build;
-use rocket::Rocket;
 use rusqlite::Connection;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -15,12 +13,12 @@ use tokio::sync::Mutex;
 
 const REGISTRY_URL:&str = "registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/migrate-wicked-git:latest";
 const TABLE_NAME: &str = "entries";
-const TIME_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
-
+const TIME_FORMAT: &str = "%Y %b %d %H:%M:%S%.3f %z";
+const FILE_EXPIRATION_IN_SEC: i64 = 5*60;
 struct Entry {
     uuid: String,
     file_path: String,
-    _creation_time: String,
+    creation_time: String,
 }
 
 fn get_row(uuid: &str, database: &Connection) -> rusqlite::Result<Entry> {
@@ -36,7 +34,7 @@ fn get_row(uuid: &str, database: &Connection) -> rusqlite::Result<Entry> {
         Ok(Entry {
             uuid: row.get(0)?,
             file_path: row.get(1)?,
-            _creation_time: row.get(2)?,
+            creation_time: row.get(2)?,
         })
     })?;
     Ok(row)
@@ -78,28 +76,9 @@ fn get_file_contents(path: PathBuf) -> Result<String, anyhow::Error> {
     Ok(contents.to_string())
 }
 
-fn uuid_exists_in_table(uuid: &str, database: &Connection) -> rusqlite::Result<bool> {
-    let mut query_exists_stmt =
-        database.prepare(format!("SELECT uuid FROM {} WHERE uuid = (?1)", TABLE_NAME).as_str())?;
-    let query_result = query_exists_stmt.query([&uuid])?;
-
-    let rows = query_result.mapped(|row| {
-        Ok(Entry {
-
-            uuid: row.get(0)?,
-            file_path: row.get(1)?,
-            _creation_time: row.get(2)?,
-        })
-    });
-    Ok(rows.count() > 0)
-}
-
 fn create_and_add_row(path: String, database: &Connection) -> rusqlite::Result<String> {
-    let mut uuid = uuid::Uuid::new_v4().to_string();
+    let uuid = uuid::Uuid::new_v4().to_string();
 
-    while uuid_exists_in_table(&uuid, &database)? {
-        uuid = uuid::Uuid::new_v4().to_string();
-    }
     let time: String = chrono::Local::now().format(TIME_FORMAT).to_string();
 
     let mut add_stmt = database.prepare(
@@ -243,12 +222,53 @@ fn migrate(data_string: String) -> Result<String, anyhow::Error> {
     Command::new("tar")
         .args(["cf", output_path_str, "-C", &migrated_file_location, "."])
         .output()?;
-
     Ok(output_path_str.to_string())
 }
 
-#[launch]
-fn rocket() -> Rocket<Build> {
+async fn rm_file_after_expiration(database: &Arc<Mutex<Connection>>) -> Result<(), anyhow::Error> {
+    let database = database.lock().await;
+    let mut stmt = database.prepare(format!("SELECT * FROM {}", TABLE_NAME).as_str())?;
+    let rows = stmt.query([])?;
+    let rows = rows.mapped(|row| {
+        Ok(Entry {
+            uuid: row.get(0)?,
+            file_path: row.get(1)?,
+            creation_time: row.get(2)?,
+        })
+    });
+    for row in rows {
+        let row = row?;
+        let time_passed_since_creation = chrono::Local::now().time()
+            - chrono::DateTime::parse_from_str(&row.creation_time.as_str(), TIME_FORMAT)?.time();
+        let t_delta = match time_passed_since_creation
+            .checked_sub(&chrono::TimeDelta::new(FILE_EXPIRATION_IN_SEC, 0).unwrap())
+        {
+            Some(t_delta) => t_delta,
+            None => chrono::TimeDelta::zero(),
+        };
+        if t_delta > chrono::TimeDelta::zero() {
+            std::fs::remove_file(row.file_path)?;
+
+            let mut stmt = database
+                .prepare(format!("DELETE FROM {} WHERE uuid = (?1)", TABLE_NAME).as_str())?;
+            stmt.execute([row.uuid])?;
+        }
+    }
+    Ok(())
+}
+
+async fn async_db_cleanup(db_clone: Arc<Mutex<Connection>>) {
+    loop {
+        match rm_file_after_expiration(&db_clone).await {
+            Ok(ok) => ok,
+            Err(e) => println!("{}", e),
+        };
+        rocket::tokio::time::sleep(std::time::Duration::from_secs(3*60)).await;
+    }
+}
+
+#[rocket::main]
+async fn main() -> Result<(), rocket::Error> {
     let database = Connection::open_in_memory().unwrap();
     database
         .execute(
@@ -266,8 +286,14 @@ fn rocket() -> Rocket<Build> {
         .unwrap();
 
     let db_data = Arc::new(Mutex::new(database));
+    let db_clone = Arc::clone(&db_data);
+
+    rocket::tokio::spawn(async_db_cleanup(db_clone));
 
     rocket::build()
         .mount("/", routes![receive_data, return_config_file, redirect])
         .manage(db_data)
+        .launch()
+        .await?;
+    Ok(())
 }
