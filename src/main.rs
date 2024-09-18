@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate rocket;
+use rand::Rng;
 use rocket::data::{Data, ToByteUnit};
 use rocket::http::Status;
 use rocket::response::status;
@@ -8,9 +9,8 @@ use rocket::Rocket;
 use rusqlite::Connection;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use tempfile::{self, tempdir};
-use rand::Rng;
 use std::sync::Arc;
+use tempfile::{self, tempdir};
 use tokio::sync::Mutex;
 
 const REGISTRY_URL:&str = "registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/migrate-wicked-git:latest";
@@ -162,7 +162,10 @@ async fn redirect(
         match data.open(10.mebibytes()).into_string().await {
             Ok(str) => str,
             Err(e) => {
-                return Err(status::Custom(Status::InternalServerError, format!("Error when retrieving data: {}", e)))
+                return Err(status::Custom(
+                    Status::InternalServerError,
+                    format!("Error when retrieving data: {}", e),
+                ))
             }
         };
 
@@ -171,14 +174,20 @@ async fn redirect(
     let path = match migrate(data_string.to_string()) {
         Ok(path) => path,
         Err(e) => {
-            return Err(status::Custom(Status::InternalServerError, format!("Error when migrating: {}", e)))
+            return Err(status::Custom(
+                Status::InternalServerError,
+                format!("Error when migrating: {}", e),
+            ))
         }
     };
 
     let id_s = match create_and_add_row(path, &database) {
         Ok(id_s) => id_s,
         Err(e) => {
-            return Err(status::Custom(Status::InternalServerError, format!("Error when creating database: {}", e)))
+            return Err(status::Custom(
+                Status::InternalServerError,
+                format!("Error when creating database: {}", e),
+            ))
         }
     };
     Ok(rocket::response::Redirect::to(format!("/{}", id_s)))
@@ -229,17 +238,10 @@ fn migrate(data_string: String) -> Result<String, anyhow::Error> {
         );
     }
 
-    let migrated_file_location =
-        format!("{}/NM-migrated", tmp_dir.path().display());
+    let migrated_file_location = format!("{}/NM-migrated", tmp_dir.path().display());
 
     Command::new("tar")
-        .args([
-            "cf",
-            output_path_str,
-            "-C",
-            &migrated_file_location,
-            ".",
-        ])
+        .args(["cf", output_path_str, "-C", &migrated_file_location, "."])
         .output()?;
     Ok(output_path_str.to_string())
 }
@@ -265,13 +267,6 @@ fn rocket() -> Rocket<Build> {
     let db_data = Arc::new(Mutex::new(database));
 
     rocket::build()
-        .mount(
-            "/",
-            routes![
-                receive_data,
-                return_config_file,
-                redirect
-            ],
-        )
+        .mount("/", routes![receive_data, return_config_file, redirect])
         .manage(db_data)
 }
