@@ -1,6 +1,5 @@
 #[macro_use]
 extern crate rocket;
-use rand::Rng;
 use rocket::data::{Data, ToByteUnit};
 use rocket::http::Status;
 use rocket::response::status;
@@ -8,36 +7,21 @@ use rusqlite::Connection;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 use tempfile::{self, tempdir};
 use tokio::sync::Mutex;
 
 const REGISTRY_URL:&str = "registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/migrate-wicked-git:latest";
 const TABLE_NAME: &str = "entries";
-const TIME_FORMAT: &str = "%Y %b %d %H:%M:%S%.3f %z";
-const FILE_EXPIRATION_IN_SEC: i64 = 5*60;
-struct Entry {
-    uuid: String,
-    file_path: String,
-    creation_time: String,
-}
+const FILE_EXPIRATION_IN_SEC: u64 = 5 * 60;
 
-fn get_row(uuid: &str, database: &Connection) -> rusqlite::Result<Entry> {
-    let mut select_stmt = database.prepare(
-        format!(
-            "SELECT uuid, file_path, creation_time FROM {} WHERE uuid = (?1)",
-            TABLE_NAME
-        )
-        .as_str(),
-    )?;
+fn get_file_path_from_db(uuid: &str, database: &Connection) -> anyhow::Result<String> {
+    let mut select_stmt = database
+        .prepare(format!("SELECT file_path FROM {} WHERE uuid = (?1)", TABLE_NAME).as_str())?;
 
-    let row = select_stmt.query_row([&uuid], |row| {
-        Ok(Entry {
-            uuid: row.get(0)?,
-            file_path: row.get(1)?,
-            creation_time: row.get(2)?,
-        })
-    })?;
-    Ok(row)
+    let file_path = select_stmt.query_row([&uuid], |row| Ok(row.get(0)))?;
+    Ok(file_path?)
 }
 
 #[get("/<path>")]
@@ -47,8 +31,8 @@ async fn return_config_file(
 ) -> status::Custom<String> {
     let database = shared_state.lock().await;
 
-    let row = match get_row(&path.display().to_string(), &database) {
-        Ok(row) => row,
+    let file_path = match get_file_path_from_db(&path.display().to_string(), &database) {
+        Ok(file_path) => file_path,
         Err(e) => {
             return status::Custom(
                 Status::BadRequest,
@@ -59,7 +43,7 @@ async fn return_config_file(
 
     drop(database);
 
-    let file_contents = match get_file_contents(Path::new("/tmp/").join(row.file_path)) {
+    let file_contents = match get_file_contents(Path::new("/tmp/").join(file_path)) {
         Ok(file_contents) => file_contents,
         Err(e) => {
             return status::Custom(
@@ -76,10 +60,13 @@ fn get_file_contents(path: PathBuf) -> Result<String, anyhow::Error> {
     Ok(contents.to_string())
 }
 
-fn create_and_add_row(path: String, database: &Connection) -> rusqlite::Result<String> {
+fn create_and_add_row(path: String, database: &Connection) -> anyhow::Result<String> {
     let uuid = uuid::Uuid::new_v4().to_string();
 
-    let time: String = chrono::Local::now().format(TIME_FORMAT).to_string();
+    let time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)?
+        .as_secs()
+        .to_string();
 
     let mut add_stmt = database.prepare(
         format!(
@@ -115,7 +102,6 @@ async fn receive_data(
             return status::Custom(Status::BadRequest, format!("Error failed migration: {}", e))
         }
     };
-
 
     let database: tokio::sync::MutexGuard<'_, Connection> = shared_state.lock().await;
 
@@ -169,7 +155,9 @@ async fn redirect(
             ))
         }
     };
-    Ok(rocket::response::Redirect::to(format!("/{}", uuid)))
+    Ok(rocket::response::Redirect::to(uri!(return_config_file(
+        PathBuf::from(uuid)
+    ))))
 }
 
 fn migrate(data_string: String) -> Result<String, anyhow::Error> {
@@ -226,32 +214,27 @@ fn migrate(data_string: String) -> Result<String, anyhow::Error> {
 }
 
 async fn rm_file_after_expiration(database: &Arc<Mutex<Connection>>) -> Result<(), anyhow::Error> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let diff = now - FILE_EXPIRATION_IN_SEC;
+
     let database = database.lock().await;
-    let mut stmt = database.prepare(format!("SELECT * FROM {}", TABLE_NAME).as_str())?;
-    let rows = stmt.query([])?;
-    let rows = rows.mapped(|row| {
-        Ok(Entry {
-            uuid: row.get(0)?,
-            file_path: row.get(1)?,
-            creation_time: row.get(2)?,
-        })
-    });
+    let mut stmt = database
+        .prepare(format!("SELECT * FROM {} WHERE creation_time < (?1)", TABLE_NAME).as_str())?;
+    let rows = stmt.query([diff])?;
+    let rows = rows.mapped(|row| Ok((row.get(0), row.get(1))));
+
     for row in rows {
         let row = row?;
-        let time_passed_since_creation = chrono::Local::now().time()
-            - chrono::DateTime::parse_from_str(&row.creation_time.as_str(), TIME_FORMAT)?.time();
-        let t_delta = match time_passed_since_creation
-            .checked_sub(&chrono::TimeDelta::new(FILE_EXPIRATION_IN_SEC, 0).unwrap())
-        {
-            Some(t_delta) => t_delta,
-            None => chrono::TimeDelta::zero(),
-        };
-        if t_delta > chrono::TimeDelta::zero() {
-            std::fs::remove_file(row.file_path)?;
-
-            let mut stmt = database
-                .prepare(format!("DELETE FROM {} WHERE uuid = (?1)", TABLE_NAME).as_str())?;
-            stmt.execute([row.uuid])?;
+        let uuid: String = row.0?;
+        let path: String = row.1?;
+        let mut stmt: rusqlite::Statement<'_> =
+            database.prepare(format!("DELETE FROM {} WHERE uuid = (?1)", TABLE_NAME).as_str())?;
+        stmt.execute([uuid])?;
+        if let Err(e) = std::fs::remove_file(path) {
+            eprintln!("Error when removing file: {e}");
         }
     }
     Ok(())
@@ -261,14 +244,14 @@ async fn async_db_cleanup(db_clone: Arc<Mutex<Connection>>) {
     loop {
         match rm_file_after_expiration(&db_clone).await {
             Ok(ok) => ok,
-            Err(e) => println!("{}", e),
+            Err(e) => eprintln!("Error when running file cleanup: {}", e),
         };
-        rocket::tokio::time::sleep(std::time::Duration::from_secs(3*60)).await;
+        std::thread::sleep(std::time::Duration::from_secs(15));
     }
 }
 
-#[rocket::main]
-async fn main() -> Result<(), rocket::Error> {
+#[launch]
+async fn rocket() -> rocket::Rocket<rocket::Build> {
     let database = Connection::open_in_memory().unwrap();
     database
         .execute(
@@ -276,7 +259,7 @@ async fn main() -> Result<(), rocket::Error> {
                 "CREATE TABLE IF NOT EXISTS {} (
                 uuid TEXT PRIMARY KEY,
                 file_path TEXT NOT NULL,
-                creation_time TEXT
+                creation_time INTEGER
                 )",
                 TABLE_NAME
             )
@@ -286,14 +269,9 @@ async fn main() -> Result<(), rocket::Error> {
         .unwrap();
 
     let db_data = Arc::new(Mutex::new(database));
-    let db_clone = Arc::clone(&db_data);
-
-    rocket::tokio::spawn(async_db_cleanup(db_clone));
+    rocket::tokio::spawn(async_db_cleanup(db_data.clone()));
 
     rocket::build()
         .mount("/", routes![receive_data, return_config_file, redirect])
         .manage(db_data)
-        .launch()
-        .await?;
-    Ok(())
 }
