@@ -89,14 +89,14 @@ fn id_exists_in_table(id_s: &str, database: &Connection) -> rusqlite::Result<boo
             _creation_time: row.get(2)?,
         })
     });
-    Ok(if rows.count() > 0 { true } else { false })
+    Ok(rows.count() > 0)
 }
 
 fn create_and_add_row(path: String, database: &Connection) -> rusqlite::Result<String> {
     let mut id = rand::thread_rng().gen_range(0..1000000000);
     let mut id_s = format!("{:0>9}", id);
 
-    while id_exists_in_table(&id_s, &database)? {
+    while id_exists_in_table(&id_s, database)? {
         id = rand::thread_rng().gen_range(0..1000000000);
         id_s = format!("{:0>9}", id);
     }
@@ -209,7 +209,7 @@ fn migrate(data_string: String) -> Result<String, anyhow::Error> {
 
     let arguments_str = format!("run --rm -v {}:/migration-tmpdir:z {} bash -c 
         \"migrate-wicked migrate -c /migration-tmpdir/{} && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated\"", 
-        tmp_dir.path().display().to_string(),
+        tmp_dir.path().display(),
         REGISTRY_URL,
         input_path_filename
     );
