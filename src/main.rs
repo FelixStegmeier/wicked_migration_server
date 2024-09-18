@@ -241,7 +241,7 @@ fn migrate(data_string: String) -> Result<String, anyhow::Error> {
             ".",
         ])
         .output()?;
-    Err(anyhow::anyhow!("testing"))
+    Ok(output_path_str.to_string())
 }
 
 #[launch]
