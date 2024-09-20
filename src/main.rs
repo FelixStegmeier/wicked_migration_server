@@ -5,6 +5,7 @@ use rocket::data::{Data, ToByteUnit};
 use rocket::http::Status;
 use rocket::response::status;
 use rusqlite::Connection;
+use std::fs::create_dir_all;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
@@ -262,10 +263,18 @@ struct Args {
 #[launch]
 async fn rocket() -> rocket::Rocket<rocket::Build> {
     let args = Args::parse();
-    println!("{}", args.db_path);
     let db_path = args.db_path;
 
-    let database = Connection::open(db_path).unwrap();
+    if db_path == DEFAULT_DB_PATH {
+        if let Some(path) = Path::new(&db_path).parent() {
+            if !path.exists() {
+                create_dir_all(path)
+                    .unwrap_or_else(|err| panic!("Couldn't create db directory: {err}"));
+            }
+        }
+    };
+    let database =
+        Connection::open(&db_path).unwrap_or_else(|err| panic!("Couldn't create database: {err}"));
 
     database
         .execute(
