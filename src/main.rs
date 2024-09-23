@@ -1,9 +1,11 @@
 #[macro_use]
 extern crate rocket;
+use clap::Parser;
 use rocket::data::{Data, ToByteUnit};
 use rocket::http::Status;
 use rocket::response::status;
 use rusqlite::Connection;
+use std::fs::create_dir_all;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
@@ -14,6 +16,7 @@ use tokio::sync::Mutex;
 
 const REGISTRY_URL:&str = "registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/migrate-wicked-git:latest";
 const TABLE_NAME: &str = "entries";
+const DEFAULT_DB_PATH: &str = "/var/lib/wicked_migration_server/db.db3";
 const FILE_EXPIRATION_IN_SEC: u64 = 5 * 60;
 
 fn get_file_path_from_db(uuid: &str, database: &Connection) -> anyhow::Result<String> {
@@ -250,9 +253,29 @@ async fn async_db_cleanup(db_clone: Arc<Mutex<Connection>>) {
     }
 }
 
+#[derive(Parser)]
+#[command(about = "Server to host Wicked config migration", long_about = None)]
+struct Args {
+    #[arg(default_value_t = DEFAULT_DB_PATH.to_string())]
+    db_path: String,
+}
+
 #[launch]
 async fn rocket() -> rocket::Rocket<rocket::Build> {
-    let database = Connection::open_in_memory().unwrap();
+    let args = Args::parse();
+    let db_path = args.db_path;
+
+    if db_path == DEFAULT_DB_PATH {
+        if let Some(path) = Path::new(&db_path).parent() {
+            if !path.exists() {
+                create_dir_all(path)
+                    .unwrap_or_else(|err| panic!("Couldn't create db directory: {err}"));
+            }
+        }
+    };
+    let database =
+        Connection::open(&db_path).unwrap_or_else(|err| panic!("Couldn't create database: {err}"));
+
     database
         .execute(
             format!(
