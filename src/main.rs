@@ -83,45 +83,6 @@ fn create_and_add_row(path: String, database: &Connection) -> anyhow::Result<Str
 }
 
 #[post("/", data = "<data>")]
-async fn receive_data(
-    data: Data<'_>,
-    shared_state: &rocket::State<Arc<Mutex<rusqlite::Connection>>>,
-) -> status::Custom<String> {
-    let data_string: rocket::data::Capped<String> =
-        match data.open(10.mebibytes()).into_string().await {
-            Ok(str) => str,
-            Err(e) => {
-                println!("Error when retrieving data: {e}");
-                return status::Custom(
-                    Status::BadRequest,
-                    format!("Error when receiving data: {}", e),
-                );
-            }
-        };
-
-    let path = match migrate(data_string.to_string()) {
-        Ok(path) => path,
-        Err(e) => {
-            return status::Custom(Status::BadRequest, format!("Error failed migration: {}", e))
-        }
-    };
-
-    let database: tokio::sync::MutexGuard<'_, Connection> = shared_state.lock().await;
-
-    let uuid = match create_and_add_row(path, &database) {
-        Ok(uuid) => uuid,
-        Err(e) => {
-            return status::Custom(
-                Status::BadRequest,
-                format!("Error failed adding entry in database: {}", e),
-            )
-        }
-    };
-    drop(database);
-    status::Custom(Status::Created, uuid)
-}
-
-#[post("/download", data = "<data>")]
 async fn redirect(
     data: Data<'_>,
     shared_state: &rocket::State<Arc<Mutex<rusqlite::Connection>>>,
@@ -295,6 +256,6 @@ async fn rocket() -> rocket::Rocket<rocket::Build> {
     rocket::tokio::spawn(async_db_cleanup(db_data.clone()));
 
     rocket::build()
-        .mount("/", routes![receive_data, return_config_file, redirect])
+        .mount("/", routes![return_config_file, redirect])
         .manage(db_data)
 }
