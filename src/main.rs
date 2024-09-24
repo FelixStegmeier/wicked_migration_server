@@ -1,13 +1,13 @@
-#[macro_use]
-extern crate rocket;
+use axum::extract::{Path, State};
+use axum::http::StatusCode;
+use axum::response::{IntoResponse, Response};
+use axum::routing::post;
+use axum::{routing::get, Router};
 use clap::Parser;
-use rocket::data::{Data, ToByteUnit};
-use rocket::http::Status;
-use rocket::response::status;
 use rusqlite::Connection;
 use std::fs::create_dir_all;
-use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -17,7 +17,7 @@ use tokio::sync::Mutex;
 const REGISTRY_URL:&str = "registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/migrate-wicked-git:latest";
 const TABLE_NAME: &str = "entries";
 const DEFAULT_DB_PATH: &str = "/var/lib/wicked_migration_server/db.db3";
-const FILE_EXPIRATION_IN_SEC: u64 = 5 * 60;
+const FILE_EXPIRATION_IN_SEC: u64 = 5; //* 60;
 
 fn get_file_path_from_db(uuid: &str, database: &Connection) -> anyhow::Result<String> {
     let mut select_stmt = database
@@ -27,38 +27,36 @@ fn get_file_path_from_db(uuid: &str, database: &Connection) -> anyhow::Result<St
     Ok(file_path?)
 }
 
-#[get("/<path>")]
 async fn return_config_file(
-    path: PathBuf,
-    shared_state: &rocket::State<Arc<Mutex<rusqlite::Connection>>>,
-) -> status::Custom<String> {
-    let database = shared_state.lock().await;
-
-    let file_path = match get_file_path_from_db(&path.display().to_string(), &database) {
+    Path(path): Path<String>,
+    State(shared_state): State<AppState>,
+) -> Response {
+    let database = shared_state.database.lock().await;
+    let file_path = match get_file_path_from_db(
+        &std::path::PathBuf::from_str(&path)
+            .unwrap()
+            .display()
+            .to_string(),
+        &database,
+    ) {
         Ok(file_path) => file_path,
-        Err(e) => {
-            return status::Custom(
-                Status::BadRequest,
-                format!("Error when attempting to access and read file: {}", e),
-            )
+        Err(_e) => {
+            return StatusCode::BAD_REQUEST.into_response();
         }
     };
 
     drop(database);
 
-    let file_contents = match get_file_contents(Path::new("/tmp/").join(file_path)) {
+    let file_contents = match get_file_contents(std::path::Path::new("/tmp/").join(file_path)) {
         Ok(file_contents) => file_contents,
-        Err(e) => {
-            return status::Custom(
-                Status::BadRequest,
-                format!("Error when attempting to access and read file: {}", e),
-            )
+        Err(_e) => {
+            return StatusCode::BAD_REQUEST.into_response();
         }
     };
-    status::Custom(Status::Ok, file_contents)
+    file_contents.into_response()
 }
 
-fn get_file_contents(path: PathBuf) -> Result<String, anyhow::Error> {
+fn get_file_contents(path: std::path::PathBuf) -> Result<String, anyhow::Error> {
     let contents = std::fs::read_to_string(path)?;
     Ok(contents.to_string())
 }
@@ -81,47 +79,20 @@ fn create_and_add_row(path: String, database: &Connection) -> anyhow::Result<Str
     add_stmt.execute([&uuid, &path, &time])?;
     Ok(uuid)
 }
+async fn redirect(State(shared_state): State<AppState>, data_string: String) -> Response {
+    let database: tokio::sync::MutexGuard<'_, Connection> = shared_state.database.lock().await;
 
-#[post("/", data = "<data>")]
-async fn redirect(
-    data: Data<'_>,
-    shared_state: &rocket::State<Arc<Mutex<rusqlite::Connection>>>,
-) -> Result<rocket::response::Redirect, status::Custom<String>> {
-    let data_string: rocket::data::Capped<String> =
-        match data.open(10.mebibytes()).into_string().await {
-            Ok(str) => str,
-            Err(e) => {
-                return Err(status::Custom(
-                    Status::InternalServerError,
-                    format!("Error when retrieving data: {}", e),
-                ))
-            }
-        };
-
-    let database: tokio::sync::MutexGuard<'_, Connection> = shared_state.lock().await;
-
-    let path = match migrate(data_string.to_string()) {
+    let path = match migrate(data_string) {
         Ok(path) => path,
-        Err(e) => {
-            return Err(status::Custom(
-                Status::InternalServerError,
-                format!("Error when migrating: {}", e),
-            ))
-        }
+        Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
 
     let uuid = match create_and_add_row(path, &database) {
         Ok(uuid) => uuid,
-        Err(e) => {
-            return Err(status::Custom(
-                Status::InternalServerError,
-                format!("Error when creating database: {}", e),
-            ))
-        }
+        Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
-    Ok(rocket::response::Redirect::to(uri!(return_config_file(
-        PathBuf::from(uuid)
-    ))))
+    println!("{}", uuid);
+    axum::response::Redirect::to(format!("/{}", uuid).as_str()).into_response()
 }
 
 fn migrate(data_string: String) -> Result<String, anyhow::Error> {
@@ -184,9 +155,9 @@ async fn rm_file_after_expiration(database: &Arc<Mutex<Connection>>) -> Result<(
         .as_secs();
     let diff = now - FILE_EXPIRATION_IN_SEC;
 
-    let database = database.lock().await;
-    let mut stmt = database
-        .prepare(format!("SELECT * FROM {} WHERE creation_time < (?1)", TABLE_NAME).as_str())?;
+    let db = database.lock().await;
+    let mut stmt =
+        db.prepare(format!("SELECT * FROM {} WHERE creation_time < (?1)", TABLE_NAME).as_str())?;
     let rows = stmt.query([diff])?;
     let rows = rows.mapped(|row| Ok((row.get(0), row.get(1))));
 
@@ -195,7 +166,7 @@ async fn rm_file_after_expiration(database: &Arc<Mutex<Connection>>) -> Result<(
         let uuid: String = row.0?;
         let path: String = row.1?;
         let mut stmt: rusqlite::Statement<'_> =
-            database.prepare(format!("DELETE FROM {} WHERE uuid = (?1)", TABLE_NAME).as_str())?;
+            db.prepare(format!("DELETE FROM {} WHERE uuid = (?1)", TABLE_NAME).as_str())?;
         stmt.execute([uuid])?;
         if let Err(e) = std::fs::remove_file(path) {
             eprintln!("Error when removing file: {e}");
@@ -204,7 +175,7 @@ async fn rm_file_after_expiration(database: &Arc<Mutex<Connection>>) -> Result<(
     Ok(())
 }
 
-async fn async_db_cleanup(db_clone: Arc<Mutex<Connection>>) {
+async fn async_db_cleanup(db_clone: Arc<Mutex<Connection>>) -> ! {
     loop {
         match rm_file_after_expiration(&db_clone).await {
             Ok(ok) => ok,
@@ -220,21 +191,26 @@ struct Args {
     #[arg(default_value_t = DEFAULT_DB_PATH.to_string())]
     db_path: String,
 }
+#[derive(Clone)]
+struct AppState {
+    database: Arc<Mutex<Connection>>,
+}
 
-#[launch]
-async fn rocket() -> rocket::Rocket<rocket::Build> {
+#[tokio::main]
+async fn main() {
     let args = Args::parse();
     let db_path = args.db_path;
 
     if db_path == DEFAULT_DB_PATH {
-        if let Some(path) = Path::new(&db_path).parent() {
+        if let Some(path) = std::path::Path::new(&db_path).parent() {
             if !path.exists() {
                 create_dir_all(path)
                     .unwrap_or_else(|err| panic!("Couldn't create db directory: {err}"));
             }
         }
     };
-    let database =
+
+    let database: Connection =
         Connection::open(&db_path).unwrap_or_else(|err| panic!("Couldn't create database: {err}"));
 
     database
@@ -251,11 +227,21 @@ async fn rocket() -> rocket::Rocket<rocket::Build> {
             (),
         )
         .unwrap();
-
     let db_data = Arc::new(Mutex::new(database));
-    rocket::tokio::spawn(async_db_cleanup(db_data.clone()));
 
-    rocket::build()
-        .mount("/", routes![return_config_file, redirect])
-        .manage(db_data)
+    tokio::spawn(async_db_cleanup(db_data.clone()));
+
+    let app_state = AppState { database: db_data };
+
+    let app = Router::new()
+        .route("/:uuid", get(return_config_file))
+        .route("/", post(redirect))
+        .with_state(app_state);
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+        .await
+        .unwrap();
+
+    println!("listening on {}", listener.local_addr().unwrap());
+    axum::serve(listener, app).await.unwrap();
 }
