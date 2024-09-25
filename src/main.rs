@@ -1,9 +1,10 @@
-use axum::extract::{Path, State};
+use axum::extract::{Multipart, Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{routing::get, Router};
 use clap::Parser;
+use core::str;
 use rusqlite::Connection;
 use std::fs::create_dir_all;
 use std::process::Command;
@@ -19,6 +20,11 @@ const TABLE_NAME: &str = "entries";
 const DEFAULT_DB_PATH: &str = "/var/lib/wicked_migration_server/db.db3";
 const FILE_EXPIRATION_IN_SEC: u64 = 5; //* 60;
 
+struct File {
+    file_content: String,
+    file_name: String,
+}
+
 fn get_file_path_from_db(uuid: &str, database: &Connection) -> anyhow::Result<String> {
     let mut select_stmt = database
         .prepare(format!("SELECT file_path FROM {} WHERE uuid = (?1)", TABLE_NAME).as_str())?;
@@ -27,7 +33,7 @@ fn get_file_path_from_db(uuid: &str, database: &Connection) -> anyhow::Result<St
     Ok(file_path?)
 }
 
-async fn return_config_file(
+async fn return_config_file_get(
     Path(path): Path<String>,
     State(shared_state): State<AppState>,
 ) -> Response {
@@ -79,10 +85,47 @@ fn create_and_add_row(path: String, database: &Connection) -> anyhow::Result<Str
     add_stmt.execute([&uuid, &path, &time])?;
     Ok(uuid)
 }
-async fn redirect(State(shared_state): State<AppState>, data_string: String) -> Response {
-    let database: tokio::sync::MutexGuard<'_, Connection> = shared_state.database.lock().await;
 
-    let path = match migrate(data_string) {
+// async fn redirect_post(State(shared_state): State<AppState>, data_string: String) -> Response {
+//     let database: tokio::sync::MutexGuard<'_, Connection> = shared_state.database.lock().await;
+//     let mut data_arr: Vec<String> = Vec::new();
+//     data_arr.push(data_string);
+//     let path = match migrate(data_arr) {
+//         Ok(path) => path,
+//         Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+//     };
+
+//     let uuid = match create_and_add_row(path, &database) {
+//         Ok(uuid) => uuid,
+//         Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+//     };
+//     println!("{}", uuid);
+//     axum::response::Redirect::to(format!("/{}", uuid).as_str()).into_response()
+// }
+
+async fn redirect_post_mulipart_form(
+    State(shared_state): State<AppState>,
+    mut multipart: Multipart,
+) -> Response {
+    let database: tokio::sync::MutexGuard<'_, Connection> = shared_state.database.lock().await;
+    let mut data_array: Vec<File> = Vec::new();
+
+    while let Some(field) = multipart.next_field().await.unwrap() {
+        let file_name_ = field.file_name().unwrap().to_string(); //.split(".").collect::<Vec<_>>()[1].to_string(); //kann index out of bounds wenn kein . drinnen ist
+        let data = field.bytes().await.unwrap();
+
+        let content_string = match str::from_utf8(&data) {
+            Ok(v) => v.to_string(),
+            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+        };
+
+        data_array.push(File {
+            file_content: content_string,
+            file_name: file_name_,
+        });
+    }
+
+    let path = match migrate(data_array) {
         Ok(path) => path,
         Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
@@ -91,60 +134,81 @@ async fn redirect(State(shared_state): State<AppState>, data_string: String) -> 
         Ok(uuid) => uuid,
         Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
-    println!("{}", uuid);
+
     axum::response::Redirect::to(format!("/{}", uuid).as_str()).into_response()
 }
 
-fn migrate(data_string: String) -> Result<String, anyhow::Error> {
-    let tmp_dir: tempfile::TempDir = tempdir()?;
-
-    let input_tmpfile: tempfile::NamedTempFile = tempfile::Builder::new()
-        .suffix(".xml")
-        .tempfile_in(tmp_dir.path())?;
-
-    std::fs::write(&input_tmpfile, data_string.as_bytes())?;
-
+fn migrate(data_arr: Vec<File>) -> Result<String, anyhow::Error> {
     let output_tmpfile: tempfile::NamedTempFile = tempfile::Builder::new()
         .prefix("nm-migrated.")
         .suffix(".tar")
         .keep(true)
         .tempfile()?;
+
     let output_path_str: &str = output_tmpfile.path().to_str().unwrap();
 
-    let input_path_filename: &str = input_tmpfile
-        .path()
-        .file_name()
-        .ok_or(anyhow::anyhow!("Invalid filename"))?
-        .to_str()
-        .ok_or(anyhow::anyhow!("Invalid filename"))?;
+    let migration_target_tmpdir: tempfile::TempDir = tempdir()?;
 
-    let arguments_str = format!("run --rm -v {}:/migration-tmpdir:z {} bash -c 
-        \"migrate-wicked migrate -c /migration-tmpdir/{} && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated\"", 
-        tmp_dir.path().display(),
-        REGISTRY_URL,
-        input_path_filename
-    );
+    let mut inputfile_path_vector: Vec<tempfile::NamedTempFile> = Vec::new();
 
-    let command_output = Command::new("podman")
+    let mut file_args: String = String::new();
+
+    for file in &data_arr {
+        let input_tmpfile: tempfile::NamedTempFile =
+            tempfile::Builder::new() //in die tempfile werden die files vorm verarbeiten geschrieben
+                .suffix(&format!(".{}", file.file_name))
+                .tempfile_in(migration_target_tmpdir.path())?;
+        std::fs::write(&input_tmpfile, file.file_content.as_bytes())?;
+
+        let input_path_filename: &str = input_tmpfile
+            .path()
+            .file_name()
+            .ok_or(anyhow::anyhow!("Invalid filename"))?
+            .to_str()
+            .ok_or(anyhow::anyhow!("Invalid filename"))?;
+
+        if file_args.is_empty() {
+            file_args = input_path_filename.to_string();
+        } else {
+            file_args = format!("{} /migration-tmpdir/{}", file_args, input_path_filename);
+        }
+        inputfile_path_vector.push(input_tmpfile);
+    }
+
+    let arguments_str = if data_arr[0].file_name.contains("ifcfg") {
+        format!(
+            "run --rm -v {}:/etc/sysconfig/network:z {}",
+            migration_target_tmpdir.path().display(),
+            REGISTRY_URL
+        )
+    } else {
+        format!("run --rm -v {}:/migration-tmpdir:z {} bash -c 
+            \"migrate-wicked migrate -c /migration-tmpdir/{} && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated\"", 
+            migration_target_tmpdir.path().display(),
+            REGISTRY_URL,
+            &file_args
+        )
+    };
+
+    let output = Command::new("podman")
         .args(shlex::split(&arguments_str).unwrap())
         .output()?;
 
-    if cfg!(debug_assertions) {
-        println!(
-            "stdout: {}",
-            String::from_utf8_lossy(&command_output.stdout)
-        );
-        println!(
-            "stderr: {}",
-            String::from_utf8_lossy(&command_output.stderr)
-        );
-    }
+    println!("--------\n{}", String::from_utf8_lossy(&output.stderr));
 
-    let migrated_file_location = format!("{}/NM-migrated", tmp_dir.path().display());
-
-    Command::new("tar")
-        .args(["cf", output_path_str, "-C", &migrated_file_location, "."])
+    let migrated_file_location =
+        format!("{}/NM-migrated", migration_target_tmpdir.path().display());
+    
+    let mut command = Command::new("tar");
+    
+    command
+        .arg("cf")
+        .arg(output_path_str)
+        .arg("-C")
+        .arg(&migrated_file_location)
+        .arg(".")
         .output()?;
+
     Ok(output_path_str.to_string())
 }
 
@@ -234,8 +298,8 @@ async fn main() {
     let app_state = AppState { database: db_data };
 
     let app = Router::new()
-        .route("/:uuid", get(return_config_file))
-        .route("/", post(redirect))
+        .route("/:uuid", get(return_config_file_get))
+        .route("/", post(redirect_post_mulipart_form))
         .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
