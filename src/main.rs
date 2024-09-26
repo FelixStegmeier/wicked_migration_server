@@ -6,7 +6,7 @@ use axum::{routing::get, Router};
 use clap::Parser;
 use core::str;
 use rusqlite::Connection;
-use std::fs::create_dir_all;
+use std::fs::{self, create_dir_all};
 use std::process::Command;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -149,44 +149,27 @@ fn migrate(data_arr: Vec<File>) -> Result<String, anyhow::Error> {
 
     let migration_target_tmpdir: tempfile::TempDir = tempdir()?;
 
-    let mut inputfile_path_vector: Vec<tempfile::NamedTempFile> = Vec::new();
-
-    let mut file_args: String = String::new();
-
     for file in &data_arr {
-        let input_tmpfile: tempfile::NamedTempFile =
-            tempfile::Builder::new() //in die tempfile werden die files vorm verarbeiten geschrieben
-                .suffix(&format!(".{}", file.file_name))
-                .tempfile_in(migration_target_tmpdir.path())?;
-        std::fs::write(&input_tmpfile, file.file_content.as_bytes())?;
-
-        let input_path_filename: &str = input_tmpfile
-            .path()
-            .file_name()
-            .ok_or(anyhow::anyhow!("Invalid filename"))?
-            .to_str()
-            .ok_or(anyhow::anyhow!("Invalid filename"))?;
-
-        if file_args.is_empty() {
-            file_args = input_path_filename.to_string();
-        } else {
-            file_args = format!("{} /migration-tmpdir/{}", file_args, input_path_filename);
-        }
-        inputfile_path_vector.push(input_tmpfile);
+        let input_file_path = std::path::Path::new("..")
+            .join(migration_target_tmpdir.path())
+            .join(&file.file_name);
+        println!("input_file_path: {}", input_file_path.to_string_lossy());
+        fs::File::create_new(&input_file_path).unwrap();
+        std::fs::write(&input_file_path, file.file_content.as_bytes())?;
     }
 
     let arguments_str = if data_arr[0].file_name.contains("ifcfg") {
         format!(
-            "run --rm -v {}:/etc/sysconfig/network:z {}",
+            //"run --rm -v /home/fstegmeier/tmp/migration_test/asdf:/migration-tmpdir:z {}",
+            "run -e \"MIGRATE_WICKED_CONTINUE_MIGRATION=true\" --rm -v {}:/etc/sysconfig/network:z {}",
             migration_target_tmpdir.path().display(),
             REGISTRY_URL
         )
     } else {
         format!("run --rm -v {}:/migration-tmpdir:z {} bash -c 
-            \"migrate-wicked migrate -c /migration-tmpdir/{} && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated\"", 
+            \"migrate-wicked migrate -c /migration-tmpdir/ && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated\"", 
             migration_target_tmpdir.path().display(),
             REGISTRY_URL,
-            &file_args
         )
     };
 
@@ -194,13 +177,10 @@ fn migrate(data_arr: Vec<File>) -> Result<String, anyhow::Error> {
         .args(shlex::split(&arguments_str).unwrap())
         .output()?;
 
-    println!("--------\n{}", String::from_utf8_lossy(&output.stderr));
-
     let migrated_file_location =
         format!("{}/NM-migrated", migration_target_tmpdir.path().display());
-    
+
     let mut command = Command::new("tar");
-    
     command
         .arg("cf")
         .arg(output_path_str)
@@ -306,6 +286,5 @@ async fn main() {
         .await
         .unwrap();
 
-    println!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
 }
