@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>File Upload</title>
+</head>
+<body>
+  <h1>Upload ifcfg or .xml files</h1>
+  <input type="file" id="fileInput" multiple/>
+  <pre id="fileContent"></pre>
+
+  <button type="submit" id = "submitButton">Submit</button>
+
+  <script>
+    let uploadedFiles = [];
+
+    document.getElementById('fileInput').addEventListener('change', function(event) {
+        let fieldContent_string = "";
+            for (let i = 0; i < event.target.files.length; i++) {
+                uploadedFiles.push(event.target.files[i]);
+                fieldContent_string += event.target.files[i].name + "\n";
+            }
+
+            update_pre_thingy(fieldContent_string);
+    });
+    function update_pre_thingy(text){
+        document.getElementById('fileContent').textContent = text;
+    }
+    function downloadURL(url, name) {
+        var link = document.createElement("a");
+        link.download = name;
+        link.href = url;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        delete link;
+    }
+
+    document.getElementById('submitButton').addEventListener('click', function(event){
+        let formData = new FormData();
+        if (uploadedFiles.length > 0){
+            uploadedFiles.forEach(element => {
+                formData.append('files[]', element);
+            });
+
+            fetch('http://localhost:3000', {method: 'POST', body: formData,})
+            .then(
+                response => {
+                    fetch(downloadURL(response.url, "nm-migrated.tar"));
+                }
+            );
+            
+            uploadedFiles = [];
+            document.getElementById('fileContent').textContent = "";
+        }
+        else{
+            document.getElementById('fileContent').textContent = "please add a file first";
+        }
+    });
+  </script>
+</body>
+</html>

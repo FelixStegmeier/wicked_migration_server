@@ -18,7 +18,7 @@ use tokio::sync::Mutex;
 const REGISTRY_URL:&str = "registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/migrate-wicked-git:latest";
 const TABLE_NAME: &str = "entries";
 const DEFAULT_DB_PATH: &str = "/var/lib/wicked_migration_server/db.db3";
-const FILE_EXPIRATION_IN_SEC: u64 = 5; //* 60;
+const FILE_EXPIRATION_IN_SEC: u64 = 5 * 60;
 
 struct File {
     file_content: String,
@@ -85,23 +85,6 @@ fn create_and_add_row(path: String, database: &Connection) -> anyhow::Result<Str
     add_stmt.execute([&uuid, &path, &time])?;
     Ok(uuid)
 }
-
-// async fn redirect_post(State(shared_state): State<AppState>, data_string: String) -> Response {
-//     let database: tokio::sync::MutexGuard<'_, Connection> = shared_state.database.lock().await;
-//     let mut data_arr: Vec<String> = Vec::new();
-//     data_arr.push(data_string);
-//     let path = match migrate(data_arr) {
-//         Ok(path) => path,
-//         Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-//     };
-
-//     let uuid = match create_and_add_row(path, &database) {
-//         Ok(uuid) => uuid,
-//         Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-//     };
-//     println!("{}", uuid);
-//     axum::response::Redirect::to(format!("/{}", uuid).as_str()).into_response()
-// }
 
 async fn redirect_post_mulipart_form(
     State(shared_state): State<AppState>,
@@ -176,6 +159,8 @@ fn migrate(data_arr: Vec<File>) -> Result<String, anyhow::Error> {
     let output = Command::new("podman")
         .args(shlex::split(&arguments_str).unwrap())
         .output()?;
+
+    println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
 
     let migrated_file_location =
         format!("{}/NM-migrated", migration_target_tmpdir.path().display());
@@ -279,6 +264,7 @@ async fn main() {
 
     let app = Router::new()
         .route("/:uuid", get(return_config_file_get))
+        .route("/", get(browser_html))
         .route("/", post(redirect_post_mulipart_form))
         .with_state(app_state);
 
@@ -287,4 +273,8 @@ async fn main() {
         .unwrap();
 
     axum::serve(listener, app).await.unwrap();
+}
+
+async fn browser_html() -> Response {
+    axum::response::Html(std::fs::read_to_string("basic.html").unwrap()).into_response()
 }
