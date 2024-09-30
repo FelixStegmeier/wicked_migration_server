@@ -44,10 +44,10 @@
                 formData.append('files[]', element);
             });
 
-            fetch('http://localhost:3000', {method: 'POST', body: formData,})
+            fetch('/multipart', {method: 'POST', body: formData,})
             .then(
                 response => {
-                    fetch(downloadURL(response.url, "nm-migrated.tar"));
+                    downloadURL(response.url, "nm-migrated.tar")
                 }
             );
             
