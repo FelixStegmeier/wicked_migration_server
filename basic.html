@@ -3,60 +3,156 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>File Upload</title>
-</head>
-<body>
-  <h1>Upload ifcfg or .xml files</h1>
-  <input type="file" id="fileInput" multiple/>
-  <pre id="fileContent"></pre>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+    }
 
-  <button type="submit" id = "submitButton">Submit</button>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background-color: #f5f5f5;
+    }
+
+    .top{
+      background-color: #f6a0a0;
+    }
+
+    .dragndrop{
+      background-color: #ccf48b;
+    }
+
+    h3 {
+      font-size: 24px;
+      color: #333;
+      margin-bottom: 20px;
+    }
+
+    input[type="file"] {
+      display: block;
+      margin: 20px auto;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    pre {
+      background-color: #f0f0f0;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      padding: 15px;
+      max-height: 200px;
+      overflow-y: auto;
+      text-align: left;
+      font-size: 14px;
+      color: #555;
+      margin-top: 20px;
+      margin-bottom: 5px;
+    }
+
+    button {
+      background-color: #4CAF50;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background-color 0.3s;
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+  </style>
+  <link rel="shortcut icon" href="#"><!--idk was das ist, mal schauen... es behebt den ersten error mit favicon.ico-->
+</head>
+
+<body class="body">
+  <div>
+    <div class="top">
+      <h1>Wicked Migration</h1>
+    </div>
+
+    <div class="dragndrop">
+      <h2>Drag And Drop ifcfg or .xml files</h2>
+    </div>
+      
+    <div class="input">
+      <h3>Upload ifcfg or .xml files</h3>
+      <input type="file" id="fileInput" multiple/>
+      <pre id="fileContent"></pre>
+
+      <button type="submit" id = "submitButton">Submit</button>
+    </div>
+  </div>
+
+
 
   <script>
     let uploadedFiles = [];
 
     document.getElementById('fileInput').addEventListener('change', function(event) {
+      clear_uploadedFiles()
         let fieldContent_string = "";
-            for (let i = 0; i < event.target.files.length; i++) {
-                uploadedFiles.push(event.target.files[i]);
-                fieldContent_string += event.target.files[i].name + "\n";
-            }
-
-            update_pre_thingy(fieldContent_string);
+        for (let i = 0; i < event.target.files.length; i++) {
+            uploadedFiles.push(event.target.files[i]);
+            fieldContent_string += event.target.files[i].name + "\n";
+            console.log(event.target.files[i].name);
+        }
+        console.log(fieldContent_string);
+        update_pre(fieldContent_string);
     });
-    function update_pre_thingy(text){
+    function clear_uploadedFiles(){
+      uploadedFiles = [];
+    }
+    function update_pre(text){
         document.getElementById('fileContent').textContent = text;
     }
     function downloadURL(url, name) {
-        var link = document.createElement("a");
-        link.download = name;
-        link.href = url;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        delete link;
+      var link = document.createElement("a");
+      link.download = name;
+      link.href = url;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      delete link;
     }
 
     document.getElementById('submitButton').addEventListener('click', function(event){
-        let formData = new FormData();
-        if (uploadedFiles.length > 0){
-            uploadedFiles.forEach(element => {
-                formData.append('files[]', element);
-            });
+      let formData = new FormData();
+      if (uploadedFiles.length > 0){
+          uploadedFiles.forEach(element => {
+              formData.append('files[]', element);
+          });
 
-            fetch('/multipart', {method: 'POST', body: formData,})
-            .then(
-                response => {
+          fetch('/multipart', {method: 'POST', body: formData,})
+          .then(
+              response => {
+                  if(response.ok){
                     downloadURL(response.url, "nm-migrated.tar")
-                }
-            );
-            
-            uploadedFiles = [];
-            document.getElementById('fileContent').textContent = "";
-        }
-        else{
-            document.getElementById('fileContent').textContent = "please add a file first";
-        }
+                  }
+                  else{
+                    document.getElementById('fileContent').textContent = "Upload failed. Please try again.";
+                  }
+              }
+          ).catch(error => {
+              document.getElementById('fileContent').textContent = "Network error occurred. Please try again.";
+          });
+
+          uploadedFiles = [];
+          document.getElementById('fileContent').textContent = "";
+      }
+      else{
+          document.getElementById('fileContent').textContent = "Please add a file first";
+      }
     });
   </script>
 </body>
