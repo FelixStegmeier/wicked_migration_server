@@ -23,7 +23,6 @@ const FILE_EXPIRATION_IN_SEC: u64 = 5 * 60;
 struct File {
     file_content: String,
     file_name: String,
-    file_type: String,
 }
 
 fn get_file_path_from_db(uuid: &str, database: &Connection) -> anyhow::Result<String> {
@@ -98,7 +97,7 @@ async fn redirect_post_mulipart_form(
     while let Some(field) = multipart.next_field().await.unwrap() {
         let file_type = field.content_type().unwrap().to_string();
         let file_name = field.file_name().unwrap().to_string();
-        
+
         let data = field.bytes().await.unwrap();
 
         let file_content = match str::from_utf8(&data) {
@@ -106,20 +105,24 @@ async fn redirect_post_mulipart_form(
             Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
         };
 
-        if file_name.contains("ifcfg") {
-            ifcfg = true;
-        } else if file_name.contains("xml") {
-            xml = true; 
-        }
+        if file_type == "text/plain" {
+            ifcfg = true
+        };
+        if file_type == "text/xml" {
+            xml = true
+        };
 
         data_array.push(File {
             file_content,
             file_name,
-            file_type,
         });
     }
-    if (ifcfg && xml) || (!ifcfg && !xml) {
-        return StatusCode::BAD_REQUEST.into_response();
+
+    println!("has ifcfg: {}\nhas xml: {}", ifcfg, xml);
+
+    if ifcfg && xml {
+        println!("both ifcfg and xml");
+        return StatusCode::BAD_REQUEST.into_response(); //hier was machen wenn die gemixt sind
     }
 
     let path = match migrate(data_array) {
@@ -139,8 +142,7 @@ async fn redirect(State(shared_state): State<AppState>, data_string: String) -> 
     let database: tokio::sync::MutexGuard<'_, Connection> = shared_state.database.lock().await;
     let data_arr: Vec<File> = vec![File {
         file_content: data_string,
-        file_name: ".xml".to_string(),/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-        file_type: ".xml".to_string(),
+        file_name: "file.xml".to_string(), //was mach ich mit dir
     }];
     let path = match migrate(data_arr) {
         Ok(path) => path,
@@ -194,8 +196,9 @@ fn migrate(data_arr: Vec<File>) -> Result<String, anyhow::Error> {
         .args(shlex::split(&arguments_str).unwrap())
         .output()?;
 
-    println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
-
+    if cfg!(debug_assertions) {
+        println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+    }
     let migrated_file_location =
         format!("{}/NM-migrated", migration_target_tmpdir.path().display());
 
