@@ -1,11 +1,12 @@
-use axum::extract::{Path, State};
+use axum::extract::{Multipart, Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{routing::get, Router};
 use clap::Parser;
+use core::str;
 use rusqlite::Connection;
-use std::fs::create_dir_all;
+use std::fs::{self, create_dir_all};
 use std::process::Command;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -17,7 +18,31 @@ use tokio::sync::Mutex;
 const REGISTRY_URL:&str = "registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/migrate-wicked-git:latest";
 const TABLE_NAME: &str = "entries";
 const DEFAULT_DB_PATH: &str = "/var/lib/wicked_migration_server/db.db3";
-const FILE_EXPIRATION_IN_SEC: u64 = 5; //* 60;
+const FILE_EXPIRATION_IN_SEC: u64 = 5 * 60;
+
+#[derive(PartialEq)]
+enum FileType {
+    Xml,
+    Ifcfg,
+}
+
+impl FromStr for FileType {
+    type Err = anyhow::Error;
+    fn from_str(file_type: &str) -> Result<Self, Self::Err> {
+        match file_type {
+            "text/xml" => Ok(FileType::Xml),
+            "text/plain" => Ok(FileType::Ifcfg),
+            "application/octet-stream" => Ok(FileType::Ifcfg),
+            _ => Err(anyhow::anyhow!("Unsupported file type: {}", file_type)),
+        }
+    }
+}
+
+struct File {
+    file_content: String,
+    file_name: String,
+    file_type: FileType,
+}
 
 fn get_file_path_from_db(uuid: &str, database: &Connection) -> anyhow::Result<String> {
     let mut select_stmt = database
@@ -27,7 +52,7 @@ fn get_file_path_from_db(uuid: &str, database: &Connection) -> anyhow::Result<St
     Ok(file_path?)
 }
 
-async fn return_config_file(
+async fn return_config_file_get(
     Path(path): Path<String>,
     State(shared_state): State<AppState>,
 ) -> Response {
@@ -79,10 +104,76 @@ fn create_and_add_row(path: String, database: &Connection) -> anyhow::Result<Str
     add_stmt.execute([&uuid, &path, &time])?;
     Ok(uuid)
 }
-async fn redirect(State(shared_state): State<AppState>, data_string: String) -> Response {
-    let database: tokio::sync::MutexGuard<'_, Connection> = shared_state.database.lock().await;
 
-    let path = match migrate(data_string) {
+async fn redirect_post_mulipart_form(
+    State(shared_state): State<AppState>,
+    mut multipart: Multipart,
+) -> Response {
+    let database: tokio::sync::MutexGuard<'_, Connection> = shared_state.database.lock().await;
+    let mut data_array: Vec<File> = Vec::new();
+
+    while let Some(field) = multipart.next_field().await.unwrap() {
+        let file_type = match field.content_type() {
+            Some(file_type) => file_type,
+            None => {
+                return Response::builder()
+                    .status(400)
+                    .header("Content-Type", "text/plain")
+                    .body("Type missing in multipart/form data".into())
+                    .unwrap()
+            }
+        };
+
+        let file_type = match FileType::from_str(file_type) {
+            Ok(file_type) => file_type,
+            Err(e) => {
+                return Response::builder()
+                    .status(400)
+                    .header("Content-Type", "text/plain")
+                    .body(format!("Error when parsing file type: {}", e).into())
+                    .unwrap()
+            }
+        };
+
+        let file_name = match field.file_name() {
+            Some(file_name) => file_name.to_string(),
+            None => {
+                return Response::builder()
+                    .status(400)
+                    .header("Content-Type", "text/plain")
+                    .body("file name field missing in multipart/form data".into())
+                    .unwrap()
+            }
+        };
+
+        let data = match field.bytes().await {
+            Ok(data) => data,
+            Err(e) => {
+                return Response::builder()
+                    .status(500)
+                    .header("Content-Type", "text/plain")
+                    .body(format!("Server was unable to read file: {}", e).into())
+                    .unwrap()
+            } //err 400 oder 500?
+        };
+
+        let file_content = match str::from_utf8(&data) {
+            Ok(v) => v.to_string(),
+            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+        };
+
+        data_array.push(File {
+            file_content,
+            file_name,
+            file_type,
+        });
+    }
+
+    data_array
+        .windows(2)
+        .all(|elements| elements[0].file_type == elements[1].file_type);
+
+    let path = match migrate(data_array) {
         Ok(path) => path,
         Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
@@ -91,42 +182,77 @@ async fn redirect(State(shared_state): State<AppState>, data_string: String) -> 
         Ok(uuid) => uuid,
         Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
-    println!("{}", uuid);
     axum::response::Redirect::to(format!("/{}", uuid).as_str()).into_response()
 }
 
-fn migrate(data_string: String) -> Result<String, anyhow::Error> {
-    let tmp_dir: tempfile::TempDir = tempdir()?;
+async fn redirect(State(shared_state): State<AppState>, data_string: String) -> Response {
+    let database: tokio::sync::MutexGuard<'_, Connection> = shared_state.database.lock().await;
+    let data_arr: Vec<File> = vec![File {
+        file_content: data_string,
+        file_name: "wicked.xml".to_string(),
+        file_type: FileType::Xml,
+    }];
+    let path = match migrate(data_arr) {
+        Ok(path) => path,
+        Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
 
-    let input_tmpfile: tempfile::NamedTempFile = tempfile::Builder::new()
-        .suffix(".xml")
-        .tempfile_in(tmp_dir.path())?;
+    let uuid = match create_and_add_row(path, &database) {
+        Ok(uuid) => uuid,
+        Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+    axum::response::Redirect::to(format!("/{}", uuid).as_str()).into_response()
+}
 
-    std::fs::write(&input_tmpfile, data_string.as_bytes())?;
-
+fn migrate(data_arr: Vec<File>) -> Result<String, anyhow::Error> {
     let output_tmpfile: tempfile::NamedTempFile = tempfile::Builder::new()
         .prefix("nm-migrated.")
         .suffix(".tar")
         .keep(true)
         .tempfile()?;
+
     let output_path_str: &str = output_tmpfile.path().to_str().unwrap();
 
-    let input_path_filename: &str = input_tmpfile
-        .path()
-        .file_name()
-        .ok_or(anyhow::anyhow!("Invalid filename"))?
-        .to_str()
-        .ok_or(anyhow::anyhow!("Invalid filename"))?;
+    let migration_target_tmpdir: tempfile::TempDir = tempdir()?;
 
-    let arguments_str = format!("run --rm -v {}:/migration-tmpdir:z {} bash -c 
-        \"migrate-wicked migrate -c /migration-tmpdir/{} && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated\"", 
-        tmp_dir.path().display(),
-        REGISTRY_URL,
-        input_path_filename
-    );
+    for file in &data_arr {
+        let input_file_path = migration_target_tmpdir.path().join(&file.file_name);
+        fs::File::create_new(&input_file_path).unwrap();
+        std::fs::write(&input_file_path, file.file_content.as_bytes())?;
+    }
 
-    let command_output = Command::new("podman")
+    let arguments_str = if data_arr[0].file_type == FileType::Ifcfg {
+        //geht sicher noch schöner
+        format!(
+            //"run --rm -v /home/fstegmeier/tmp/migration_test/asdf:/migration-tmpdir:z {}",
+            "run -e \"MIGRATE_WICKED_CONTINUE_MIGRATION=true\" --rm -v {}:/etc/sysconfig/network:z {}",
+            migration_target_tmpdir.path().display(),
+            REGISTRY_URL
+        )
+    } else {
+        format!("run --rm -v {}:/migration-tmpdir:z {} bash -c 
+            \"migrate-wicked migrate -c /migration-tmpdir/ && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated\"", 
+            migration_target_tmpdir.path().display(),
+            REGISTRY_URL,
+        )
+    };
+
+    let output = Command::new("podman")
         .args(shlex::split(&arguments_str).unwrap())
+        .output()?;
+
+    if cfg!(debug_assertions) {
+        println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+    }
+    let migrated_file_location =
+        format!("{}/NM-migrated", migration_target_tmpdir.path().display());
+
+    let command_output = Command::new("tar")
+        .arg("cf")
+        .arg(output_path_str)
+        .arg("-C")
+        .arg(&migrated_file_location)
+        .arg(".")
         .output()?;
 
     if cfg!(debug_assertions) {
@@ -140,11 +266,6 @@ fn migrate(data_string: String) -> Result<String, anyhow::Error> {
         );
     }
 
-    let migrated_file_location = format!("{}/NM-migrated", tmp_dir.path().display());
-
-    Command::new("tar")
-        .args(["cf", output_path_str, "-C", &migrated_file_location, "."])
-        .output()?;
     Ok(output_path_str.to_string())
 }
 
@@ -234,7 +355,9 @@ async fn main() {
     let app_state = AppState { database: db_data };
 
     let app = Router::new()
-        .route("/:uuid", get(return_config_file))
+        .route("/:uuid", get(return_config_file_get))
+        .route("/", get(browser_html))
+        .route("/multipart", post(redirect_post_mulipart_form))
         .route("/", post(redirect))
         .with_state(app_state);
 
@@ -242,6 +365,9 @@ async fn main() {
         .await
         .unwrap();
 
-    println!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
+}
+
+async fn browser_html() -> Response {
+    axum::response::Html(fs::read_to_string("basic.html").unwrap()).into_response()
 }
