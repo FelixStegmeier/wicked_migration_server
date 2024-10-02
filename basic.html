@@ -50,6 +50,7 @@
                     downloadURL(response.url, "nm-migrated.tar")
                 }
             );
+            //You should check that response.ok is true, otherwise you also issue a get request here to /multipart which produces an error.
             
             uploadedFiles = [];
             document.getElementById('fileContent').textContent = "";
