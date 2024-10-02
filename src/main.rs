@@ -20,9 +20,28 @@ const TABLE_NAME: &str = "entries";
 const DEFAULT_DB_PATH: &str = "/var/lib/wicked_migration_server/db.db3";
 const FILE_EXPIRATION_IN_SEC: u64 = 5 * 60;
 
+#[derive(PartialEq)]
+enum FileType {
+    Xml,
+    Ifcfg,
+}
+
+impl FromStr for FileType {
+    type Err = anyhow::Error;
+    fn from_str(file_type: &str) -> Result<Self, Self::Err> {
+        match file_type {
+            "text/xml" => Ok(FileType::Xml),
+            "text/plain" => Ok(FileType::Ifcfg),
+            "application/octet-stream" => Ok(FileType::Ifcfg),
+            _ => Err(anyhow::anyhow!("Unsupported file type: {}", file_type)),
+        }
+    }
+}
+
 struct File {
     file_content: String,
     file_name: String,
+    file_type: FileType,
 }
 
 fn get_file_path_from_db(uuid: &str, database: &Connection) -> anyhow::Result<String> {
@@ -92,37 +111,73 @@ async fn redirect_post_mulipart_form(
 ) -> Response {
     let database: tokio::sync::MutexGuard<'_, Connection> = shared_state.database.lock().await;
     let mut data_array: Vec<File> = Vec::new();
-    let mut ifcfg = false;
-    let mut xml = false;
-    while let Some(field) = multipart.next_field().await.unwrap() {
-        let file_type = field.content_type().unwrap().to_string();
-        let file_name = field.file_name().unwrap().to_string();
 
-        let data = field.bytes().await.unwrap();
+    while let Some(field) = multipart.next_field().await.unwrap() {
+        let file_type = match field.content_type() {
+            Some(file_type) => file_type,
+            None => {
+                return Response::builder()
+                    .status(400)
+                    .header("Content-Type", "text/plain")
+                    .body("Type missing in multipart/form data".into())
+                    .unwrap()
+            }
+        };
+
+        let file_type = match FileType::from_str(file_type) {
+            Ok(file_type) => file_type,
+            Err(e) => {
+                return Response::builder()
+                    .status(400)
+                    .header("Content-Type", "text/plain")
+                    .body(format!("Error when parsing file type: {}", e).into())
+                    .unwrap()
+            }
+        };
+
+        let file_name = match field.file_name() {
+            Some(file_name) => file_name.to_string(),
+            None => {
+                return Response::builder()
+                    .status(400)
+                    .header("Content-Type", "text/plain")
+                    .body("file name field missing in multipart/form data".into())
+                    .unwrap()
+            }
+        };
+
+        let data = match field.bytes().await {
+            Ok(data) => data,
+            Err(e) => {
+                return Response::builder()
+                    .status(500)
+                    .header("Content-Type", "text/plain")
+                    .body(format!("Server was unable to read file: {}", e).into())
+                    .unwrap()
+            } 
+        };
 
         let file_content = match str::from_utf8(&data) {
             Ok(v) => v.to_string(),
             Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
         };
 
-        if file_type == "text/plain" {
-            ifcfg = true
-        };
-        if file_type == "text/xml" {
-            xml = true
-        };
-
         data_array.push(File {
             file_content,
             file_name,
+            file_type,
         });
     }
 
-    println!("has ifcfg: {}\nhas xml: {}", ifcfg, xml);
-
-    if ifcfg && xml {
-        println!("both ifcfg and xml");
-        return StatusCode::BAD_REQUEST.into_response(); //hier was machen wenn die gemixt sind
+    if !data_array
+        .windows(2)
+        .all(|elements| elements[0].file_type == elements[1].file_type)
+    {
+        return Response::builder()
+            .status(400)
+            .header("Content-Type", "text/plain")
+            .body("File types not uniform, please dont mix ifcfg and .xml files".into())
+            .unwrap();
     }
 
     let path = match migrate(data_array) {
@@ -134,7 +189,6 @@ async fn redirect_post_mulipart_form(
         Ok(uuid) => uuid,
         Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
-
     axum::response::Redirect::to(format!("/{}", uuid).as_str()).into_response()
 }
 
@@ -142,7 +196,8 @@ async fn redirect(State(shared_state): State<AppState>, data_string: String) -> 
     let database: tokio::sync::MutexGuard<'_, Connection> = shared_state.database.lock().await;
     let data_arr: Vec<File> = vec![File {
         file_content: data_string,
-        file_name: "file.xml".to_string(), //was mach ich mit dir
+        file_name: "wicked.xml".to_string(),
+        file_type: FileType::Xml,
     }];
     let path = match migrate(data_arr) {
         Ok(path) => path,
@@ -153,7 +208,6 @@ async fn redirect(State(shared_state): State<AppState>, data_string: String) -> 
         Ok(uuid) => uuid,
         Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
-    println!("{}", uuid);
     axum::response::Redirect::to(format!("/{}", uuid).as_str()).into_response()
 }
 
@@ -164,22 +218,21 @@ fn migrate(data_arr: Vec<File>) -> Result<String, anyhow::Error> {
         .keep(true)
         .tempfile()?;
 
-    let output_path_str: &str = output_tmpfile.path().to_str().unwrap();
+    let output_path_str: &str = match output_tmpfile.path().to_str() {
+        Some(output_path_str) => output_path_str,
+        None => return Err(anyhow::anyhow!("Failed to convert path to string")),
+    };
 
     let migration_target_tmpdir: tempfile::TempDir = tempdir()?;
 
     for file in &data_arr {
-        let input_file_path = std::path::Path::new("..")
-            .join(migration_target_tmpdir.path())
-            .join(&file.file_name);
-        println!("input_file_path: {}", input_file_path.to_string_lossy());
-        fs::File::create_new(&input_file_path).unwrap();
+        let input_file_path = migration_target_tmpdir.path().join(&file.file_name);
+        fs::File::create_new(&input_file_path)?;
         std::fs::write(&input_file_path, file.file_content.as_bytes())?;
     }
 
-    let arguments_str = if data_arr[0].file_name.contains("ifcfg") {
+    let arguments_str = if data_arr[0].file_type == FileType::Ifcfg {
         format!(
-            //"run --rm -v /home/fstegmeier/tmp/migration_test/asdf:/migration-tmpdir:z {}",
             "run -e \"MIGRATE_WICKED_CONTINUE_MIGRATION=true\" --rm -v {}:/etc/sysconfig/network:z {}",
             migration_target_tmpdir.path().display(),
             REGISTRY_URL
@@ -225,10 +278,7 @@ fn migrate(data_arr: Vec<File>) -> Result<String, anyhow::Error> {
 }
 
 async fn rm_file_after_expiration(database: &Arc<Mutex<Connection>>) -> Result<(), anyhow::Error> {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
+    let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
     let diff = now - FILE_EXPIRATION_IN_SEC;
 
     let db = database.lock().await;
@@ -324,5 +374,5 @@ async fn main() {
 }
 
 async fn browser_html() -> Response {
-    axum::response::Html(std::fs::read_to_string("basic.html").unwrap()).into_response()
+    axum::response::Html(fs::read_to_string("basic.html").unwrap()).into_response()
 }
