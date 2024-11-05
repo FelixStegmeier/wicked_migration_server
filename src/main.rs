@@ -57,7 +57,7 @@ async fn return_config_file_get(
     State(shared_state): State<AppState>,
 ) -> Response {
     let database = shared_state.database.lock().await;
-    let file_path: String = match get_file_path_from_db(
+    let file_path = match get_file_path_from_db(
         &std::path::PathBuf::from_str(&path)
             .unwrap()
             .display()
@@ -154,18 +154,12 @@ async fn redirect_post_mulipart_form(
                     .header("Content-Type", "text/plain")
                     .body(format!("Server was unable to read file: {}", e).into())
                     .unwrap()
-            }
+            } 
         };
 
         let file_content = match str::from_utf8(&data) {
             Ok(v) => v.to_string(),
-            Err(e) => {
-                return Response::builder()
-                    .status(400)
-                    .header("Content-Type", "text/plain")
-                    .body(format!("Invalid UTF-8 sequence: {}", e).into())
-                    .unwrap()
-            }
+            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
         };
 
         data_array.push(File {
@@ -329,32 +323,36 @@ struct AppState {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
+async fn main() {
     let args = Args::parse();
     let db_path = args.db_path;
 
     if db_path == DEFAULT_DB_PATH {
         if let Some(path) = std::path::Path::new(&db_path).parent() {
             if !path.exists() {
-                create_dir_all(path)?;
+                create_dir_all(path)
+                    .unwrap_or_else(|err| panic!("Couldn't create db directory: {err}"));
             }
         }
     };
 
-    let database: Connection = Connection::open(&db_path)?;
+    let database: Connection =
+        Connection::open(&db_path).unwrap_or_else(|err| panic!("Couldn't create database: {err}"));
 
-    database.execute(
-        format!(
-            "CREATE TABLE IF NOT EXISTS {} (
+    database
+        .execute(
+            format!(
+                "CREATE TABLE IF NOT EXISTS {} (
                 uuid TEXT PRIMARY KEY,
                 file_path TEXT NOT NULL,
                 creation_time INTEGER
                 )",
-            TABLE_NAME
+                TABLE_NAME
+            )
+            .as_str(),
+            (),
         )
-        .as_str(),
-        (),
-    )?;
+        .unwrap();
     let db_data = Arc::new(Mutex::new(database));
 
     tokio::spawn(async_db_cleanup(db_data.clone()));
@@ -368,22 +366,13 @@ async fn main() -> Result<(), anyhow::Error> {
         .route("/", post(redirect))
         .with_state(app_state);
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+        .await
+        .unwrap();
 
-    axum::serve(listener, app).await?;
-    return Ok(());
+    axum::serve(listener, app).await.unwrap();
 }
 
 async fn browser_html() -> Response {
-    axum::response::Html(match fs::read_to_string("basic.html") {
-        Ok(ok) => ok,
-        Err(e) => {
-            return Response::builder()
-                .status(500)
-                .header("Content-Type", "text/plain")
-                .body(format!("Server was unable to read file: {}", e).into())
-                .unwrap()
-        }
-    })
-    .into_response()
+    axum::response::Html(fs::read_to_string("basic.html").unwrap()).into_response()
 }

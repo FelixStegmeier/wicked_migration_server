@@ -115,6 +115,9 @@
       <h3>Upload ifcfg or .xml files</h3>
       <div id="drop-area">
         <pre id="fileContent"></pre>
+        <div id="container">
+
+        </div>
       </div>
       <input type="file" id="fileInput" multiple />
       <div>
@@ -142,18 +145,22 @@
       textarea.style.height = textarea.scrollHeight + 'px';
     }
 
-    let temporaryName = [];
     function overwriteuploadedFiles(){
       uploadedFiles = []; 
-      temporaryName.forEach(struct => {
-        const blob = new Blob([struct.content.value], { type: 'text/plain' });
-        const newFile = new File([blob], struct.name.value, { type: 'text/plain' });
+      for(let child of document.getElementById('container').children){
+
+        if(child.querySelector('#input-name').value.includes("xml")){
+          var blob = new Blob([child.querySelector('#input-body').value], { type: 'text/plain' });
+          var newFile = new File([blob], child.querySelector('#input-name').value, { type: 'text/xml' });
+        }else{
+          var blob = new Blob([child.querySelector('#input-body').value], { type: 'text/plain' });
+          var newFile = new File([blob], child.querySelector('#input-name').value, { type: 'text/plain' });
+        }
         uploadedFiles.push(newFile);
-      });
+      }
     }
 
     let uploadedFiles = [];
-    let postableFiles = [];
 
     document.addEventListener('dragover', function (e) {
       e.preventDefault();
@@ -200,7 +207,6 @@
       let files = dt.files;
       let file_arr = Array.from(files);
       file_arr.forEach(addFile);
-      writeFileArrToPre(uploadedFiles);
     }
 
     function addFile(newFile) {
@@ -209,9 +215,7 @@
         createAndAdd(newFile);
       }
       else {
-        if (uploadedFiles_containsFile(newFile)) {
-          console.log("already exists");
-        } else {
+          if(!newFileAlreadyExists(newFile)){
           uploadedFiles.push(newFile);
           createAndAdd(newFile);
         }
@@ -224,15 +228,12 @@
       let wrapper = document.createElement("div");
       wrapper.appendChild(clone);
 
-      postableFiles.push(wrapper);
-
-      let node = document.getElementById('drop-area').appendChild(wrapper);
+      let node = document.getElementById('container').appendChild(wrapper);
 
       node.querySelector('#removeButton').addEventListener('click', function(event){
         let element = event.target.parentNode.parentNode;
         element.parentNode.removeChild(element);
         let grandparent = parent.parentNode;
-
       });
       node.querySelector("#input-name").value = newFile.name;
       let reader = new FileReader()
@@ -244,15 +245,18 @@
       }
 
       reader.readAsText(newFile);
-      let struct = {
-        wrap: wrapper,
-        name: node.querySelector("#input-name"),
-        content: node.querySelector("#input-body"),
-      }
-      temporaryName.push(struct);
       node.querySelector("#input-body").style.height = node.querySelector("#input-body").scrollHeight + 'px';
     }
 
+    function newFileAlreadyExists(newFile){
+      let name = newFile.name;
+      for(let child of document.getElementById('container').children){
+        if(child.querySelector('#input-name').value === name){
+          return true;
+        }
+      }
+      return false;
+    }
     function uploadedFiles_containsFile(newFile) {
       for (const file of uploadedFiles) {
         if (file.name === newFile.name) {
@@ -263,30 +267,19 @@
     }
 
     document.getElementById('fileInput').addEventListener('change', function (event) {
-      clear_uploadedFiles();
       let file_arr = [];
       for (let i = 0; i < event.target.files.length; i++) {
         file_arr.push(event.target.files[i]);
       }
       file_arr.forEach(addFile);
-      writeFileArrToPre(uploadedFiles);
+      event.target.value = "";
     });
 
     function clear_uploadedFiles() {
-      temporaryName = [];
       uploadedFiles = [];
-      
-      postableFiles.forEach(element => {
-        element.parentNode.removeChild(element);
-      });
-      
-      postableFiles = [];
+      document.getElementById('container').innerHTML = "";
     }
-    function writeFileArrToPre(fileArr) {
-      let fieldContent_string = "";
-      fileArr.forEach(file => fieldContent_string += file.name + "\n")
-      document.getElementById('fileContent').textContent = fieldContent_string;
-    }
+
     function downloadURL(url, name) {
       var link = document.createElement("a");
       link.download = name;
@@ -301,7 +294,7 @@
       document.getElementById('fileContent').textContent = "";
     });
     document.getElementById('submitButton').addEventListener('click', function (event) {
-      overwriteuploadedFiles(); //das ist scheiße xD
+      overwriteuploadedFiles();
 
       let formData = new FormData();
       if (uploadedFiles.length > 0) {
