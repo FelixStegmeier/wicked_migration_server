@@ -83,6 +83,17 @@
     button:hover {
       background-color: #45a049;
     }
+    .removeButton{
+      background-color:crimson;
+      padding-bottom: 1px;
+      padding-top: 1px;
+      padding-left: 7px;
+      padding-right: 7px;
+    }
+    .removeButton:hover{
+      background-color: rgba(199, 18, 54, 0.822)
+    }
+
     .textArea{
       resize: none;
       height: 100%;
@@ -117,6 +128,7 @@
 
     <div id="name-div">
       <input type="text" id="input-name">
+      <button class="removeButton" id="removeButton">-</button>
     </div>
     <div class="textArea" id="body-div">
       <textarea class="textArea" id="input-body" oninput="autoResize(this)" ></textarea>
@@ -127,7 +139,6 @@
   <script>
     function autoResize(textarea) {
       textarea.style.height = "auto";
-      console.log(textarea.scrollHeight + 'px');
       textarea.style.height = textarea.scrollHeight + 'px';
     }
 
@@ -217,6 +228,12 @@
 
       let node = document.getElementById('drop-area').appendChild(wrapper);
 
+      node.querySelector('#removeButton').addEventListener('click', function(event){
+        let element = event.target.parentNode.parentNode;
+        element.parentNode.removeChild(element);
+        let grandparent = parent.parentNode;
+
+      });
       node.querySelector("#input-name").value = newFile.name;
       let reader = new FileReader()
       reader.onload = function(e) {
@@ -233,8 +250,6 @@
         content: node.querySelector("#input-body"),
       }
       temporaryName.push(struct);
-      
-      console.log(node.querySelector("#input-body").scrollHeight+ 'px')    
       node.querySelector("#input-body").style.height = node.querySelector("#input-body").scrollHeight + 'px';
     }
 
