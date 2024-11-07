@@ -362,6 +362,8 @@ async fn main() {
     let app = Router::new()
         .route("/:uuid", get(return_config_file_get))
         .route("/", get(browser_html))
+        .route("/main.js", get(serve_js))
+        .route("/main.css", get(serve_css))
         .route("/multipart", post(redirect_post_mulipart_form))
         .route("/", post(redirect))
         .with_state(app_state);
@@ -374,5 +376,15 @@ async fn main() {
 }
 
 async fn browser_html() -> Response {
-    axum::response::Html(fs::read_to_string("basic.html").unwrap()).into_response()
+    print!("html\n");
+
+    axum::response::Html(fs::read_to_string("main.html").unwrap()).into_response()
+}
+async fn serve_js() -> Response {
+    print!("js\n");
+
+    axum::response::Html(fs::read_to_string("main.js").unwrap()).into_response()
+}async fn serve_css() -> Response {
+    print!("css\n");
+    axum::response::Html(fs::read_to_string("main.css").unwrap()).into_response()
 }

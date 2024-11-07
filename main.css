@@ -1,0 +1,97 @@
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: Arial, sans-serif;
+}
+
+#drop-area {
+    border: 2px dashed #ccc;
+    border-radius: 20px;
+    width: 480px;
+    font-family: sans-serif;
+    margin: 100px auto;
+    margin-bottom: 10px;
+    margin-top: 10px;
+    padding: 20px;
+}
+
+#drop-area.highlight {
+    border-color: purple;
+}
+
+body {
+    display: flex;
+    margin:20px;
+    min-height: 100vh;
+    background-color: #f5f5f5;
+}
+
+h3 {
+    font-size: 24px;
+    color: #333;
+    margin-bottom: 20px;
+}
+
+.input {
+    margin-top: 50px;
+}
+
+input[type="file"] {
+    display: block;
+    margin: 20px auto;
+    margin-left: 0px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+pre {
+    background-color: #f0f0f0;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 15px;
+    max-height: 200px;
+    overflow-y: auto;
+    text-align: left;
+    font-size: 14px;
+    color: #555;
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+button {
+    background-color: #4CAF50;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s;
+}
+
+button:hover {
+    background-color: #45a049;
+}
+.removeButton{
+    background-color:crimson;
+    padding-bottom: 1px;
+    padding-top: 1px;
+    padding-left: 7px;
+    padding-right: 7px;
+}
+.removeButton:hover{
+    background-color: rgba(199, 18, 54, 0.822)
+}
+
+.textArea{
+    resize: none;
+    height: 100%;
+    columns: auto;
+    width: 100%;
+    overflow: hidden;
+}
