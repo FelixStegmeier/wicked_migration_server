@@ -14,6 +14,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use tempfile::{self, tempdir};
 use tokio::sync::Mutex;
+use tower_http::services::ServeFile;
 
 const REGISTRY_URL:&str = "registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/migrate-wicked-git:latest";
 const TABLE_NAME: &str = "entries";
@@ -154,7 +155,7 @@ async fn redirect_post_mulipart_form(
                     .header("Content-Type", "text/plain")
                     .body(format!("Server was unable to read file: {}", e).into())
                     .unwrap()
-            } 
+            }
         };
 
         let file_content = match str::from_utf8(&data) {
@@ -362,6 +363,8 @@ async fn main() {
     let app = Router::new()
         .route("/:uuid", get(return_config_file_get))
         .route("/", get(browser_html))
+        .route_service("/style.css", ServeFile::new("static/style.css"))
+        .route_service("/script.js", ServeFile::new("static/script.js"))
         .route("/multipart", post(redirect_post_mulipart_form))
         .route("/", post(redirect))
         .with_state(app_state);
@@ -374,5 +377,5 @@ async fn main() {
 }
 
 async fn browser_html() -> Response {
-    axum::response::Html(fs::read_to_string("basic.html").unwrap()).into_response()
+    axum::response::Html(fs::read_to_string("static/main.html").unwrap()).into_response()
 }

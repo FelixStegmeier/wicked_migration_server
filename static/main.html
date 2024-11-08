@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+
+<body class="body" ondragstart="return false;" ondrop="return false;">
+  <div>
+    <div>
+      <h1>Wicked Migration</h1>
+    </div>
+
+    <div class="input">
+      <h3>Upload ifcfg or .xml files</h3>
+      <div id="drop-area">
+        <pre id="fileContent"></pre>
+        <div id="container">
+
+        </div>
+      </div>
+      <input type="file" id="fileInput" multiple />
+      <div>
+        <button type="submit" id="submitButton">Submit</button>
+        <button type="reset" id="resetButton">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <template id="template">
+
+    <div id="name-div">
+      <input type="text" id="input-name">
+      <button class="removeButton" id="removeButton">-</button>
+    </div>
+    <div class="textArea" id="body-div">
+      <textarea class="textArea" id="input-body" oninput="autoResize(this)" ></textarea>
+    </div>
+
+  </template>
+
+  <script src="script.js"></script>
+</body>
+
+</html>
