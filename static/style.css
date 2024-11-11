@@ -8,12 +8,12 @@
 #drop-area {
     border: 2px dashed #ccc;
     border-radius: 20px;
-    width: 480px;
     font-family: sans-serif;
     margin: 100px auto;
     margin-bottom: 10px;
-    margin-top: 10px;
+    margin-top: 0px;
     padding: 20px;
+    min-height: 200px;
 }
 
 #drop-area.highlight {
@@ -21,10 +21,79 @@
 }
 
 body {
-    display: flex;
-    margin:20px;
-    min-height: 100vh;
     background-color: #f5f5f5;
+    min-height: 100vh;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+main {
+    flex: 1;
+}
+
+#content {
+    margin-left: 20px;
+    margin-right: 20px;
+    margin-bottom: auto;
+}
+
+header {
+    background-color: #4bb679;
+    padding-top: 20px;
+    padding-bottom: 20px;
+}
+
+footer {
+    background-color: #173f4f;
+    color: white;
+    text-align: center;
+    margin-top: 30px;
+}
+
+#footer-content {
+    margin-top: 20px;
+    margin-bottom: 10px;
+    margin-left: 20px;
+    margin-right: 20px;
+}
+
+.footer-icon-link {
+    font-size: 2em;
+}
+
+#footer-links-section {
+    display: flex;
+    justify-content: space-between;
+}
+
+#docs-links {
+    margin-top: auto;
+    margin-bottom: auto;
+}
+
+#docs-links a {
+    text-decoration: none;
+}
+
+#docs-links a:hover {
+    text-decoration: underline;
+}
+
+a, a:visited{
+    color: white;
+}
+
+ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    text-align: left;
+}
+
+h1 {
+    text-align: center;
+    color: white;
 }
 
 h3 {
@@ -33,19 +102,8 @@ h3 {
     margin-bottom: 20px;
 }
 
-.input {
-    margin-top: 50px;
-}
-
-input[type="file"] {
-    display: block;
-    margin: 20px auto;
-    margin-left: 0px;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    font-size: 14px;
-    cursor: pointer;
+#input-container {
+    margin-top: 20px;
 }
 
 pre {
@@ -53,44 +111,133 @@ pre {
     border: 1px solid #ddd;
     border-radius: 5px;
     padding: 15px;
-    max-height: 200px;
     overflow-y: auto;
     text-align: left;
     font-size: 14px;
     color: #555;
-    margin-top: 5px;
-    margin-bottom: 5px;
+    flex: 1;
+    margin-right: 10px;
+    min-height: 50px;
 }
 
 button {
-    background-color: #4CAF50;
     color: white;
-    padding: 10px 20px;
     border: none;
     border-radius: 5px;
     cursor: pointer;
     font-size: 16px;
-    transition: background-color 0.3s;
 }
 
-button:hover {
+#submit-button {
+    background-color: #4CAF50;
+    padding: 10px 20px;
+    transition: background-color 0.3s;
+    min-height: 50px;
+}
+
+#submit-button:hover {
     background-color: #45a049;
 }
-.removeButton{
-    background-color:crimson;
+
+.remove-file-button {
+    background-color: crimson;
+    color: white;
     padding-bottom: 1px;
     padding-top: 1px;
     padding-left: 7px;
     padding-right: 7px;
+    margin-left: 5px;
 }
-.removeButton:hover{
+.remove-file-button:hover{
     background-color: rgba(199, 18, 54, 0.822)
 }
 
-.textArea{
-    resize: none;
-    height: 100%;
-    columns: auto;
+.file-header {
+    margin-bottom: 5px;
+    display: flex;
+}
+
+.file-header input[type='text'] {
+    background-color: #FFFFFF;
+    border: 1px solid #D6D9DC;
+    border-radius: 3px;
     width: 100%;
-    overflow: hidden;
+    padding: 7px;
+    font-size: 14px;
+}
+
+.file-content textarea {
+    font-family: monospace;
+    font-size: 14px;
+
+    border: 1px solid #D6D9DC;
+    border-radius: 3px;
+
+    min-height: 200px;
+    padding: 7px;
+    resize: none;
+    width: 100%;
+}
+
+input[type="file"] {
+    display: none;
+}
+
+.custom-button {
+    background-color: lightgrey;
+    border: 1px solid #D6D9DC;
+    border-radius: 3px;
+    display: inline-block;
+    padding: 6px 12px;
+    cursor: pointer;
+    margin-bottom: 10px;
+}
+
+.custom-button:hover {
+    background-color: silver;
+}
+
+#reset-files-button {
+    display: none;
+}
+
+hr.solid-divider {
+    margin-top: 8px;
+    margin-bottom: 8px;
+    border: 2px solid #bbb;
+    border-radius: 3px;
+}
+
+#files-header {
+    display: flex;
+    justify-content: space-between;
+}
+
+#migration-container {
+    display: flex;
+}
+
+.placeholder {
+    opacity: 50%;
+}
+
+#file-placeholder-icon {
+    font-size: 3em;
+    margin-bottom: 4px;
+    opacity: 20%;
+}
+
+.center-container {
+    height: 200px;
+    position: relative;
+}
+
+.center-element {
+    margin: 0;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    -ms-transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%);
+    text-align: center;
 }

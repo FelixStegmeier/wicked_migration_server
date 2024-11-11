@@ -1,63 +1,130 @@
+let uploadedFiles = [];
+
+pageSetup();
+
+function pageSetup() {
+    const dropArea = document.getElementById('drop-area');
+
+    document.addEventListener('dragover', function(e) {
+        e.preventDefault();
+    });
+
+    document.addEventListener('drop', function(e) {
+        e.preventDefault();
+    });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropArea.addEventListener(eventName, highlight, false)
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, unhighlight, false)
+    });
+
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, preventDefaults, false)
+    });
+
+    dropArea.addEventListener('drop', handleDrop, false);
+
+    document.getElementById('file-upload').addEventListener('change', function(event) {
+        let file_arr = [];
+        for (let i = 0; i < event.target.files.length; i++) {
+            file_arr.push(event.target.files[i]);
+        }
+        file_arr.forEach(addFile);
+        event.target.value = "";
+        setFileDividers(document.getElementById('file-container'));
+    });
+
+    document.getElementById('reset-files-button').addEventListener('click', function(event) {
+        clear_uploadedFiles();
+        showUserInfo("");
+    });
+
+    document.getElementById('submit-button').addEventListener('click', function(event) {
+        overwriteUploadedFiles();
+
+        let formData = new FormData();
+        if (uploadedFiles.length > 0) {
+            uploadedFiles.forEach(element => {
+                formData.append('files[]', element);
+            });
+
+            fetch('/multipart', {
+                    method: 'POST',
+                    body: formData,
+                })
+                .then(
+                    response => {
+                        if (response.ok) {
+                            downloadURL(response.url, "nm-migrated.tar")
+                        } else {
+                            response.text().then(body => showUserInfo(body)).catch(e => showUserInfo(e));
+                        }
+                    }
+                ).catch(error => {
+                    showUserInfo("Network error occurred. Please try again.");
+                });
+
+            uploadedFiles = [];
+            showUserInfo("");
+        } else {
+            showUserInfo("Please add a file first");
+        }
+    });
+}
+
+function showUserInfo(text) {
+    const userInfo = document.getElementById('user-info');
+    userInfo.textContent = text;
+}
+
+function overwriteUploadedFiles() {
+    uploadedFiles = [];
+    for (let child of getFiles(document.getElementById('file-container'))) {
+        let blob, newFile
+
+        if (child.querySelector('#file-name').value.includes("xml")) {
+            blob = new Blob([child.querySelector('#file-content-textarea').value], {
+                type: 'text/plain'
+            });
+            newFile = new File([blob], child.querySelector('#file-name').value, {
+                type: 'text/xml'
+            });
+        } else {
+            blob = new Blob([child.querySelector('#file-content-textarea').value], {
+                type: 'text/plain'
+            });
+            newFile = new File([blob], child.querySelector('#file-name').value, {
+                type: 'text/plain'
+            });
+        }
+        uploadedFiles.push(newFile);
+    }
+}
+
 function autoResize(textarea) {
     textarea.style.height = "auto";
     textarea.style.height = textarea.scrollHeight + 'px';
-  }
+}
 
-  function overwriteuploadedFiles(){
-    uploadedFiles = []; 
-    for(let child of document.getElementById('container').children){
-
-      if(child.querySelector('#input-name').value.includes("xml")){
-        var blob = new Blob([child.querySelector('#input-body').value], { type: 'text/plain' });
-        var newFile = new File([blob], child.querySelector('#input-name').value, { type: 'text/xml' });
-      }else{
-        var blob = new Blob([child.querySelector('#input-body').value], { type: 'text/plain' });
-        var newFile = new File([blob], child.querySelector('#input-name').value, { type: 'text/plain' });
-      }
-      uploadedFiles.push(newFile);
-    }
-  }
-
-  let uploadedFiles = [];
-
-  document.addEventListener('dragover', function (e) {
-    e.preventDefault();
-  });
-
-  document.addEventListener('drop', function (e) {
-    e.preventDefault();
-  });
-  
-
-  let dropArea = document.getElementById('drop-area')
-    ;['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-      dropArea.addEventListener(eventName, preventDefaults, false)
-    })
-  
-  function preventDefaults(e) {
+function preventDefaults(e) {
     e.preventDefault()
     e.stopPropagation()
-  }
+}
 
-  ;['dragenter', 'dragover'].forEach(eventName => {
-    dropArea.addEventListener(eventName, highlight, false)
-  })
-
-  ;['dragleave', 'drop'].forEach(eventName => {
-    dropArea.addEventListener(eventName, unhighlight, false)
-  })
-
-  function highlight(e) {
+function highlight(e) {
+    const dropArea = document.getElementById('drop-area');
     dropArea.classList.add('highlight')
-  }
+}
 
-  function unhighlight(e) {
+function unhighlight(e) {
+    const dropArea = document.getElementById('drop-area');
     dropArea.classList.remove('highlight')
-  }
+}
 
-  dropArea.addEventListener('drop', handleDrop, false);
-
-  function handleDrop(e) {
+function handleDrop(e) {
     e.preventDefault();
     e.stopPropagation();
 
@@ -65,119 +132,93 @@ function autoResize(textarea) {
     let files = dt.files;
     let file_arr = Array.from(files);
     file_arr.forEach(addFile);
-  }
+    setFileDividers(document.getElementById('file-container'));
+}
 
-  function addFile(newFile) {
-    if (uploadedFiles.length == 0) {
-      uploadedFiles.push(newFile);
-      createAndAdd(newFile);
-    }
-    else {
-        if(!newFileAlreadyExists(newFile)){
+function addFile(newFile) {
+    if (!newFileAlreadyExists(newFile)) {
         uploadedFiles.push(newFile);
         createAndAdd(newFile);
-      }
     }
-  }
-  function createAndAdd(newFile) {
-    var templateRef = document.getElementById("template");
-    
-    let clone = templateRef.content.cloneNode(true);
-    let wrapper = document.createElement("div");
-    wrapper.appendChild(clone);
+}
 
-    let node = document.getElementById('container').appendChild(wrapper);
+function createAndAdd(newFile) {
+    const templateRef = document.getElementById("file-template");
+    let node = templateRef.content.cloneNode(true);
 
-    node.querySelector('#removeButton').addEventListener('click', function(event){
-      let element = event.target.parentNode.parentNode;
-      element.parentNode.removeChild(element);
-      let grandparent = parent.parentNode;
+    const fileTextArea = node.querySelector("#file-content-textarea");
+    fileTextArea.style.height = fileTextArea.scrollHeight + 'px';
+
+    node.querySelector('#remove-button').addEventListener('click', function(event) {
+        let element = event.target.closest("#file");
+        element.parentNode.removeChild(element);
+        setFileDividers(document.getElementById('file-container'));
+        showOrHideFilePlaceholder();
     });
-    node.querySelector("#input-name").value = newFile.name;
+
+    node.querySelector("#file-name").value = newFile.name;
     let reader = new FileReader()
     reader.onload = function(e) {
-      node.querySelector("#input-body").value = e.target.result;
+        fileTextArea.value = e.target.result;
         setTimeout(() => {
-        node.querySelector("#input-body").style.height = node.querySelector("#input-body").scrollHeight + 'px';
-      }, 0);
+            fileTextArea.style.height = fileTextArea.scrollHeight + 'px';
+        }, 0);
     }
-
     reader.readAsText(newFile);
-    node.querySelector("#input-body").style.height = node.querySelector("#input-body").scrollHeight + 'px';
-  }
 
-  function newFileAlreadyExists(newFile){
+    let fileContainer = document.getElementById('file-container');
+    fileContainer.appendChild(node);
+
+    showOrHideFilePlaceholder();
+}
+
+// Returns an array containing only all file elements of node
+function getFiles(node) {
+    return Array.from(node.children).filter((child) => child.className === "file");
+}
+
+// Removes all current dividers from node
+// and then inserts divivders between all elements of node
+function setFileDividers(node) {
+    for (let divider of Array.from(node.children).filter((child) => child.className === "solid-divider")) {
+        divider.remove();
+    }
+    let children = Array.from(node.children);
+    children.pop();
+    for (let child of children) {
+        let newDivider = document.createElement('hr');
+        newDivider.classList.add('solid-divider');
+        node.insertBefore(newDivider, child.nextSibling);
+    }
+}
+
+// If there are no files present a placeholder is shown, otherwise it gets hidden
+function showOrHideFilePlaceholder() {
+    document.getElementById('file-placeholder').hidden = getFiles(document.getElementById('file-container')).length != 0;
+}
+
+function newFileAlreadyExists(newFile) {
     let name = newFile.name;
-    for(let child of document.getElementById('container').children){
-      if(child.querySelector('#input-name').value === name){
-        return true;
-      }
+    for (let child of getFiles(document.getElementById('file-container'))) {
+        if (child.querySelector('#file-name').value === name) {
+            return true;
+        }
     }
     return false;
-  }
-  function uploadedFiles_containsFile(newFile) {
-    for (const file of uploadedFiles) {
-      if (file.name === newFile.name) {
-        return true;
-      }
-    }
-    return false;
-  }
+}
 
-  document.getElementById('fileInput').addEventListener('change', function (event) {
-    let file_arr = [];
-    for (let i = 0; i < event.target.files.length; i++) {
-      file_arr.push(event.target.files[i]);
-    }
-    file_arr.forEach(addFile);
-    event.target.value = "";
-  });
-
-  function clear_uploadedFiles() {
+function clear_uploadedFiles() {
     uploadedFiles = [];
-    document.getElementById('container').innerHTML = "";
-  }
+    document.getElementById('file-container').innerHTML = "";
+    showOrHideFilePlaceholder();
+}
 
-  function downloadURL(url, name) {
-    var link = document.createElement("a");
+function downloadURL(url, name) {
+    let link = document.createElement("a");
     link.download = name;
     link.href = url;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     delete link;
-  }
-  document.getElementById('resetButton').addEventListener('click', function (event) {
-    clear_uploadedFiles();
-    document.getElementById('fileContent').textContent = "";
-  });
-  document.getElementById('submitButton').addEventListener('click', function (event) {
-    overwriteuploadedFiles();
-
-    let formData = new FormData();
-    if (uploadedFiles.length > 0) {
-      uploadedFiles.forEach(element => {
-        formData.append('files[]', element);
-      });
-
-      fetch('/multipart', { method: 'POST', body: formData, })
-        .then(
-          response => {
-            if (response.ok) {
-              downloadURL(response.url, "nm-migrated.tar")
-            }
-            else {
-              response.text().then(body => document.getElementById('fileContent').textContent = body).catch(e => document.getElementById('fileContent').textContent = e);
-            }
-          }
-        ).catch(error => {
-          document.getElementById('fileContent').textContent = "Network error occurred. Please try again.";
-        });
-
-      uploadedFiles = [];
-      document.getElementById('fileContent').textContent = "";
-    }
-    else {
-      document.getElementById('fileContent').textContent = "Please add a file first";
-    }
-  });
+}
