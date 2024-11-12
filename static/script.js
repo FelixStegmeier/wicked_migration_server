@@ -1,5 +1,3 @@
-let uploadedFiles = [];
-
 pageSetup();
 
 function pageSetup() {
@@ -38,40 +36,40 @@ function pageSetup() {
     });
 
     document.getElementById('reset-files-button').addEventListener('click', function(event) {
-        clear_uploadedFiles();
+        clearFiles();
         showUserInfo("");
     });
 
     document.getElementById('submit-button').addEventListener('click', function(event) {
-        overwriteUploadedFiles();
+        let filesContent = getFilesContent();
+
+        if (filesContent.length <= 0) {
+            showUserInfo("Please add a file first");
+            return;
+        }
 
         let formData = new FormData();
-        if (uploadedFiles.length > 0) {
-            uploadedFiles.forEach(element => {
-                formData.append('files[]', element);
+        filesContent.forEach(element => {
+            formData.append('files[]', element);
+        });
+
+        fetch('/multipart', {
+                method: 'POST',
+                body: formData,
+            })
+            .then(
+                response => {
+                    if (response.ok) {
+                        downloadURL(response.url, "nm-migrated.tar")
+                    } else {
+                        response.text().then(body => showUserInfo(body)).catch(e => showUserInfo(e));
+                    }
+                }
+            ).catch(error => {
+                showUserInfo("Network error occurred. Please try again.");
             });
 
-            fetch('/multipart', {
-                    method: 'POST',
-                    body: formData,
-                })
-                .then(
-                    response => {
-                        if (response.ok) {
-                            downloadURL(response.url, "nm-migrated.tar")
-                        } else {
-                            response.text().then(body => showUserInfo(body)).catch(e => showUserInfo(e));
-                        }
-                    }
-                ).catch(error => {
-                    showUserInfo("Network error occurred. Please try again.");
-                });
-
-            uploadedFiles = [];
-            showUserInfo("");
-        } else {
-            showUserInfo("Please add a file first");
-        }
+        showUserInfo("");
     });
 }
 
@@ -80,28 +78,28 @@ function showUserInfo(text) {
     userInfo.textContent = text;
 }
 
-function overwriteUploadedFiles() {
-    uploadedFiles = [];
+function getFilesContent() {
+    let files = [];
+
     for (let child of getFiles(document.getElementById('file-container'))) {
-        let blob, newFile
+        let blob = new Blob([child.querySelector('#file-content-textarea').value], {
+            type: 'text/plain'
+        });
+        let newFile
 
         if (child.querySelector('#file-name').value.includes("xml")) {
-            blob = new Blob([child.querySelector('#file-content-textarea').value], {
-                type: 'text/plain'
-            });
             newFile = new File([blob], child.querySelector('#file-name').value, {
                 type: 'text/xml'
             });
         } else {
-            blob = new Blob([child.querySelector('#file-content-textarea').value], {
-                type: 'text/plain'
-            });
             newFile = new File([blob], child.querySelector('#file-name').value, {
                 type: 'text/plain'
             });
         }
-        uploadedFiles.push(newFile);
+        files.push(newFile);
     }
+
+    return files;
 }
 
 function autoResize(textarea) {
@@ -137,7 +135,6 @@ function handleDrop(e) {
 
 function addFile(newFile) {
     if (!newFileAlreadyExists(newFile)) {
-        uploadedFiles.push(newFile);
         createAndAdd(newFile);
     }
 }
@@ -207,8 +204,7 @@ function newFileAlreadyExists(newFile) {
     return false;
 }
 
-function clear_uploadedFiles() {
-    uploadedFiles = [];
+function clearFiles() {
     document.getElementById('file-container').innerHTML = "";
     showOrHideFilePlaceholder();
 }
