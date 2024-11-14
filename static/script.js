@@ -12,11 +12,11 @@ function pageSetup() {
     });
 
     ['dragenter', 'dragover'].forEach(eventName => {
-        dropArea.addEventListener(eventName, highlight, false)
+        dropArea.addEventListener(eventName, highlightDropArea, false)
     });
 
     ['dragleave', 'drop'].forEach(eventName => {
-        dropArea.addEventListener(eventName, unhighlight, false)
+        dropArea.addEventListener(eventName, unhighlightDropArea, false)
     });
 
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -76,6 +76,11 @@ function pageSetup() {
 function showUserInfo(text) {
     const userInfo = document.getElementById('user-info');
     userInfo.textContent = text;
+    if (text !== "") {
+        userInfo.classList.add('highlight-error');
+    } else {
+        userInfo.classList.remove('highlight-error');
+    }
 }
 
 function getFilesContent() {
@@ -112,14 +117,14 @@ function preventDefaults(e) {
     e.stopPropagation()
 }
 
-function highlight(e) {
+function highlightDropArea(e) {
     const dropArea = document.getElementById('drop-area');
-    dropArea.classList.add('highlight')
+    dropArea.classList.add('highlight');
 }
 
-function unhighlight(e) {
+function unhighlightDropArea(e) {
     const dropArea = document.getElementById('drop-area');
-    dropArea.classList.remove('highlight')
+    dropArea.classList.remove('highlight');
 }
 
 function handleDrop(e) {
