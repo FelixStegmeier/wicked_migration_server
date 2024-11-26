@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <link rel="stylesheet" type="text/css" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" />
+</head>
+
+<body class="body" ondragstart="return false;" ondrop="return false;">
+  <header>
+    <h1>Wicked to NetworkManager</h1>
+  </header>
+  <div id="content">
+    <div id="input-container">
+      <div id="files-header">
+        <h3>Wicked configuration files</h3>
+        <div id="files-header-buttons">
+          <label for="file-upload" class="custom-button">Upload files</label>
+          <input id="file-upload" type="file" multiple />
+          <label for="reset-files-button" class="custom-button">Reset files</label>
+          <button id="reset-files-button">Reset files</button>
+        </div>
+      </div>
+      <div id="drop-area">
+        <div class="center-container" id="file-placeholder">
+          <div class="center-element">
+            <i class="placeholder fa-solid fa-file" id="file-placeholder-icon"></i>
+            <p class="placeholder">Drop ifcfg-* or .xml files here</p>
+          </div>
+        </div>
+        <div id="file-container">
+        </div>
+      </div>
+      <div id="migration-container">
+        <pre id="user-info"></pre>
+        <div>
+          <button type="submit" id="submit-button">Migrate</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <footer>
+    <div id="footer-content">
+      <div id="footer-links-section">
+        <ul id="docs-links">
+          <li><a href="https://manpages.opensuse.org/Tumbleweed/wicked/index.html" target="_blank" class="footer-link">Wicked documentation</a></li>
+          <li><a href="https://networkmanager.dev/docs/" target="_blank" class="footer-link">NetworkManager documentation</a></li>
+        </ul>
+        <ul>
+          <li>
+            <a href="https://www.opensuse.org/" target="_blank" class="footer-icon-link" id="opensuse-link"><i class="fa-brands fa-opensuse"></i></a>
+          </li>
+          <li>
+            <a href="https://github.com/FelixStegmeier/wicked_migration_server" target="_blank" class="footer-icon-link" id="github-link"><i class="fa-brands fa-github"></i></a>
+          </li>
+        </ul>
+      </div>
+      <p>Copyright 2024</p>
+    </div>
+  </footer>
+
+  <template id="file-template">
+    <div class="file" id="file">
+      <div class="file-header">
+        <input type="text" id="file-name">
+        <button class="remove-file-button" id="remove-button"><i class="fa-solid fa-trash"></i></button>
+      </div>
+      <div class="file-content">
+        <textarea spellcheck="false" oninput="autoResize(this)" id="file-content-textarea"></textarea>
+      </div>
+    </div>
+  </template>
+
+  <script src="script.js"></script>
+</body>
+
+</html>

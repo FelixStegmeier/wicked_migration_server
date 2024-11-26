@@ -332,50 +332,44 @@ async fn main() {
         if let Some(path) = std::path::Path::new(&db_path).parent() {
             if !path.exists() {
                 create_dir_all(path)
-                    .unwrap_or_else(|err| panic!("Couldn't create db directory: {err}"));
+                .unwrap_or_else(|err| panic!("Couldn't create db directory: {err}"));
             }
         }
     };
 
     let database: Connection =
-        Connection::open(&db_path).unwrap_or_else(|err| panic!("Couldn't create database: {err}"));
+    Connection::open(&db_path).unwrap_or_else(|err| panic!("Couldn't create database: {err}"));
 
     database
-        .execute(
-            format!(
-                "CREATE TABLE IF NOT EXISTS {} (
+    .execute(
+        format!(
+            "CREATE TABLE IF NOT EXISTS {} (
                 uuid TEXT PRIMARY KEY,
                 file_path TEXT NOT NULL,
                 creation_time INTEGER
-                )",
-                TABLE_NAME
-            )
-            .as_str(),
-            (),
+        )",
+        TABLE_NAME
         )
-        .unwrap();
+            .as_str(),
+             (),
+    )
+    .unwrap();
     let db_data = Arc::new(Mutex::new(database));
 
     tokio::spawn(async_db_cleanup(db_data.clone()));
 
     let app_state = AppState { database: db_data };
 
-    let app = Router::new()
-        .route("/:uuid", get(return_config_file_get))
-        .route("/", get(browser_html))
-        .route_service("/style.css", ServeFile::new("static/style.css"))
-        .route_service("/script.js", ServeFile::new("static/script.js"))
-        .route("/multipart", post(redirect_post_mulipart_form))
-        .route("/", post(redirect))
-        .with_state(app_state);
+    let routes = Router::new()
+    .route("/:uuid", get(return_config_file_get))
+    .nest_service("/static", axum::routing::get_service(tower_http::services::ServeDir::new("static/")))
+    .route("/multipart", post(redirect_post_mulipart_form))
+    .route("/", post(redirect))
+    .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
-        .await
-        .unwrap();
+    .await
+    .unwrap();
 
-    axum::serve(listener, app).await.unwrap();
-}
-
-async fn browser_html() -> Response {
-    axum::response::Html(fs::read_to_string("static/main.html").unwrap()).into_response()
+    axum::serve(listener, routes).await.unwrap();
 }
