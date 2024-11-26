@@ -40,6 +40,37 @@ function pageSetup() {
         showUserInfo("");
     });
 
+    // document.getElementById('submit-button').addEventListener('click', function(event) {
+    //     let filesContent = getFilesContent();
+
+    //     if (filesContent.length <= 0) {
+    //         showUserInfo("Please add a file first");
+    //         return;
+    //     }
+
+    //     let formData = new FormData();
+    //     filesContent.forEach(element => {
+    //         formData.append('files[]', element);
+    //     });
+        
+    //     fetch('/multipart', {
+    //             method: 'POST',
+    //             body: formData,
+    //         })
+    //         .then(
+    //             response => {
+    //                 if (response.ok) {
+    //                     downloadURL(response.url, "nm-migrated.tar")
+    //                 } else {
+    //                     response.text().then(body => showUserInfo(body)).catch(e => showUserInfo(e));
+    //                 }
+    //             }
+    //         ).catch(error => {
+    //             showUserInfo("Network error occurred. Please try again.");
+    //         });
+
+    //     showUserInfo("");
+    // });
     document.getElementById('submit-button').addEventListener('click', function(event) {
         let filesContent = getFilesContent();
 
@@ -52,23 +83,24 @@ function pageSetup() {
         filesContent.forEach(element => {
             formData.append('files[]', element);
         });
-
-        fetch('/multipart', {
-                method: 'POST',
-                body: formData,
-            })
-            .then(
-                response => {
-                    if (response.ok) {
-                        downloadURL(response.url, "nm-migrated.tar")
-                    } else {
-                        response.text().then(body => showUserInfo(body)).catch(e => showUserInfo(e));
-                    }
+        
+        fetch('/web', {
+            method: 'POST',
+            body: formData,
+        })
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    throw new Error('Something went wrong');
                 }
-            ).catch(error => {
+            })
+            .then(json => {
+                console.log(json);
+            })
+            .catch(error => {
                 showUserInfo("Network error occurred. Please try again.");
             });
-
         showUserInfo("");
     });
 }
