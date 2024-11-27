@@ -72,36 +72,40 @@ function pageSetup() {
     //     showUserInfo("");
     // });
     document.getElementById('submit-button').addEventListener('click', function(event) {
-        let filesContent = getFilesContent();
+        if(alertIfFileContainsPassword()){
 
-        if (filesContent.length <= 0) {
-            showUserInfo("Please add a file first");
-            return;
-        }
+            let files = returnDocumentTextAsFiles();
 
-        let formData = new FormData();
-        filesContent.forEach(element => {
-            formData.append('files[]', element);
-        });
-        
-        fetch('/web', {
-            method: 'POST',
-            body: formData,
-        })
-            .then(response => {
-                if (response.ok) {
-                    return response.json();
-                } else {
-                    throw new Error('Something went wrong');
-                }
-            })
-            .then(json => {
-                showUserInfo(JSON.parse(json).log)   
-            })
-            .catch(error => {
-                showUserInfo("Network error occurred. Please try again.");
+            if (files.length <= 0) {
+                showUserInfo("Please add a file first");
+                return;
+            }
+
+
+            let formData = new FormData();
+            files.forEach(element => {
+                formData.append('files[]', element);
             });
-        showUserInfo("");
+            
+            fetch('/web', {
+                method: 'POST',
+                body: formData,
+            })
+                .then(response => {
+                    if (response.ok) {
+                        return response.json();
+                    } else {
+                        throw new Error('Something went wrong');
+                    }
+                })
+                .then(json => {
+                    showUserInfo(JSON.parse(json).log)   
+                })
+                .catch(error => {
+                    showUserInfo("Network error occurred. Please try again.");
+                });
+            showUserInfo("");
+        }
     });
 }
 
@@ -115,7 +119,7 @@ function showUserInfo(text) {
     }
 }
 
-function getFilesContent() {
+function returnDocumentTextAsFiles() {
     let files = [];
 
     for (let child of getFiles(document.getElementById('file-container'))) {
@@ -254,4 +258,29 @@ function downloadURL(url, name) {
     link.click();
     document.body.removeChild(link);
     delete link;
+}
+
+function alertIfFileContainsPassword() {
+    passwords = []
+    let regex = /PASSWORD='.+'/i;
+
+    for (let child of getFiles(document.getElementById('file-container'))) {
+        let fileText = child.querySelector('#file-content-textarea').value;
+        if (checkPswd(fileText, regex)){
+            passwords.push(pswdsFound(fileText, regex));
+        }
+    }
+
+    if(passwords.length > 0){
+    let pswd_str = passwords.join(' ');
+        return confirm("You have have a password/s in your file. Consider removing it: " + pswd_str + "\n Continue anyway?");
+    }
+    return true;
+
+    function checkPswd(inputText, regex) {
+        return regex.test(inputText);
+    }
+    function pswdsFound(inputText, regex){
+        return regex.exec(inputText);
+    }
 }
