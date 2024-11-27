@@ -72,7 +72,7 @@ function pageSetup() {
     //     showUserInfo("");
     // });
     document.getElementById('submit-button').addEventListener('click', function(event) {
-        if(alertIfFileContainsPassword()){
+        if(fileNamesAreValid() && alertIfFileContainsPassword()){
 
             let files = returnDocumentTextAsFiles();
 
@@ -261,7 +261,7 @@ function downloadURL(url, name) {
 }
 
 function alertIfFileContainsPassword() {
-    passwords = []
+    let passwords = []
     let regex = /PASSWORD='.+'/i;
 
     for (let child of getFiles(document.getElementById('file-container'))) {
@@ -282,5 +282,29 @@ function alertIfFileContainsPassword() {
     }
     function pswdsFound(inputText, regex){
         return regex.exec(inputText);
+    }
+}
+
+function fileNamesAreValid(){
+    let invalidNames = []
+
+    for (let child of getFiles(document.getElementById('file-container'))) {
+        let filename = child.querySelector('#file-name').value;
+        if(!checkFilenameValidity(filename)){
+            invalidNames.push(filename);        
+        }
+    }
+    if(invalidNames.length>0){
+        alert("Invalid file names:\n" + invalidNames.join('\n') + "\nvalid name example: ifcfg-something or something.xml")
+        return false;
+    }
+    else{
+        return true;
+    }
+    function checkFilenameValidity(filename) {
+        let regex1 = /ifcfg-.+/i;
+        let regex2 = /.+\.xml/i;
+    
+        return regex1.test(filename) || regex2.test(filename);
     }
 }
