@@ -96,7 +96,7 @@ function pageSetup() {
                 }
             })
             .then(json => {
-                console.log(json);
+                showUserInfo(JSON.parse(json).log)   
             })
             .catch(error => {
                 showUserInfo("Network error occurred. Please try again.");
