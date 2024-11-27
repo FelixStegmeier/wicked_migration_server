@@ -41,19 +41,20 @@ function pageSetup() {
     });
 
     document.getElementById('submit-button').addEventListener('click', function(event) {
-        let filesContent = getFilesContent();
+        if(alertIfFileContainsPassword()){
 
-        if (filesContent.length <= 0) {
-            showUserInfo("Please add a file first");
-            return;
-        }
+            let filesContent = getFilesContent();
+            if (filesContent.length <= 0) {
+                showUserInfo("Please add a file first");
+                return;
+            }
 
-        let formData = new FormData();
-        filesContent.forEach(element => {
-            formData.append('files[]', element);
-        });
-
-        fetch('/multipart', {
+            let formData = new FormData();
+            filesContent.forEach(element => {
+                formData.append('files[]', element);
+            });
+            
+            fetch('/multipart', {
                 method: 'POST',
                 body: formData,
             })
@@ -70,6 +71,7 @@ function pageSetup() {
             });
 
         showUserInfo("");
+    }
     });
 }
 
@@ -222,4 +224,29 @@ function downloadURL(url, name) {
     link.click();
     document.body.removeChild(link);
     delete link;
+}
+
+function alertIfFileContainsPassword() {
+    passwords = []
+    let regex = /PASSWORD='.+'/i;
+
+    for (let child of getFiles(document.getElementById('file-container'))) {
+        let fileText = child.querySelector('#file-content-textarea').value;
+        if (checkPswd(fileText, regex)){
+            passwords.push(pswdsFound(fileText, regex));
+        }
+    }
+
+    if(passwords.length > 0){
+    let pswd_str = passwords.join(' ');
+        return confirm("You have have a password/s in your file. Consider removing it: " + pswd_str + "\n Continue anyway?");
+    }
+    return true;
+
+    function checkPswd(inputText, regex) {
+        return regex.test(inputText);
+    }
+    function pswdsFound(inputText, regex){
+        return regex.exec(inputText);
+    }
 }
