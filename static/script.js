@@ -36,20 +36,20 @@ function pageSetup() {
     });
 
     document.getElementById('reset-files-button').addEventListener('click', function(event) {
-        clearFiles();
+        clearFiles('file-container', 'file-placeholder');
         showUserInfo("");
     });
 
     document.getElementById('submit-button').addEventListener('click', function(event) {
-        let filesContent = getFilesContent();
+        let files = getFilesContent();
 
-        if (filesContent.length <= 0) {
+        if (files.length <= 0) {
             showUserInfo("Please add a file first");
             return;
         }
 
         let formData = new FormData();
-        filesContent.forEach(element => {
+        files.forEach(element => {
             formData.append('files[]', element);
         });
         
@@ -65,7 +65,14 @@ function pageSetup() {
                 }
             })
             .then(json => {
-                console.log(json);
+                clearFiles('file-result-container', 'file-placeholder-result');
+                let parsed_json = JSON.parse(json);
+                showUserInfo(parsed_json.log)
+                parsed_json.files.forEach(file => 
+                {
+                    createAndAddConfiguredFiles(file.fileName, file.fileContent);
+                }
+                )
             })
             .catch(error => {
                 showUserInfo("Network error occurred. Please try again.");
@@ -139,12 +146,14 @@ function handleDrop(e) {
     setFileDividers(document.getElementById('file-container'));
 }
 
+//Adds the file to the dom if it isnt already
 function addFile(newFile) {
     if (!newFileAlreadyExists(newFile)) {
         createAndAdd(newFile);
     }
 }
 
+//Adds the recieved file to the dom
 function createAndAdd(newFile) {
     const templateRef = document.getElementById("file-template");
     let node = templateRef.content.cloneNode(true);
@@ -156,7 +165,7 @@ function createAndAdd(newFile) {
         let element = event.target.closest("#file");
         element.parentNode.removeChild(element);
         setFileDividers(document.getElementById('file-container'));
-        showOrHideFilePlaceholder();
+        showOrHideFilePlaceholder('file-container', 'file-placeholder');
     });
 
     node.querySelector("#file-name").value = newFile.name;
@@ -172,7 +181,30 @@ function createAndAdd(newFile) {
     let fileContainer = document.getElementById('file-container');
     fileContainer.appendChild(node);
 
-    showOrHideFilePlaceholder();
+    showOrHideFilePlaceholder('file-container', 'file-placeholder');
+}
+
+function createAndAddConfiguredFiles(fileName, fileContent) {
+    const templateRef = document.getElementById("file-template");
+    let node = templateRef.content.cloneNode(true);
+
+    const fileTextArea = node.querySelector("#file-content-textarea");
+    fileTextArea.style.height = fileTextArea.scrollHeight + 'px';
+
+    node.querySelector('#remove-button').addEventListener('click', function(event) {
+        let element = event.target.closest("#file");
+        element.parentNode.removeChild(element);
+        setFileDividers(document.getElementById('file-result-container'));
+        showOrHideFilePlaceholder('file-result-container', 'file-placeholder-result');
+    });
+
+    node.querySelector("#file-name").value = fileName;
+    fileTextArea.value = fileContent;
+
+    let fileContainer = document.getElementById('file-result-container');
+    fileContainer.appendChild(node);
+
+    showOrHideFilePlaceholder('file-result-container', 'file-placeholder-result');
 }
 
 // Returns an array containing only all file elements of node
@@ -196,8 +228,8 @@ function setFileDividers(node) {
 }
 
 // If there are no files present a placeholder is shown, otherwise it gets hidden
-function showOrHideFilePlaceholder() {
-    document.getElementById('file-placeholder').hidden = getFiles(document.getElementById('file-container')).length != 0;
+function showOrHideFilePlaceholder(target, placeholder) {
+    document.getElementById(placeholder).hidden = getFiles(document.getElementById(target)).length != 0;
 }
 
 function newFileAlreadyExists(newFile) {
@@ -210,9 +242,9 @@ function newFileAlreadyExists(newFile) {
     return false;
 }
 
-function clearFiles() {
-    document.getElementById('file-container').innerHTML = "";
-    showOrHideFilePlaceholder();
+function clearFiles(target, placeholder) {
+    document.getElementById(target).innerHTML = "";
+    showOrHideFilePlaceholder(target, placeholder);
 }
 
 function downloadURL(url, name) {

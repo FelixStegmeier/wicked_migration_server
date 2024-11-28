@@ -413,6 +413,7 @@ async fn main() {
         .route("/", get(browser_html))
         .route_service("/style.css", ServeFile::new("static/style.css"))
         .route_service("/script.js", ServeFile::new("static/script.js"))
+        .route("/web", post(return_json))
         .route("/multipart", post(redirect_post_mulipart_form))
         .route("/", post(redirect))
         .with_state(app_state);
