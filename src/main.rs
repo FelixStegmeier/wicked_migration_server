@@ -15,7 +15,7 @@ use std::time::UNIX_EPOCH;
 use tempfile::Builder;
 use thiserror::Error;
 use tokio::sync::Mutex;
-use tower_http::services::ServeFile;
+use tower_http::services::ServeDir;
 
 const REGISTRY_URL:&str = "registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/migrate-wicked-git:latest";
 const TABLE_NAME: &str = "entries";
@@ -511,12 +511,9 @@ async fn main() {
     let app = Router::new()
         .route("/:uuid", get(return_config_file))
         .route("/json/:uuid", get(return_config_json))
-        .route("/", get(browser_html))
-        .route_service("/style.css", ServeFile::new("static/style.css"))
-        .route_service("/script.js", ServeFile::new("static/script.js"))
-        .route_service("/tar_writer.js", ServeFile::new("static/tar_writer.js"))
         .route("/multipart", post(redirect_post_multipart_form))
         .route("/json", post(redirect_post_multipart_form))
+        .nest_service("/migration", axum::routing::get_service(ServeDir::new("static/")),)
         .route("/", post(redirect))
         .with_state(app_state);
 
@@ -525,4 +522,5 @@ async fn main() {
         .unwrap();
 
     axum::serve(listener, app).await.unwrap();
+
 }
