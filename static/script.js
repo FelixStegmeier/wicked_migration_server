@@ -45,18 +45,18 @@ function pageSetup() {
             return;
         }
 
-            let filesContent = getFilesContent();
-            if (filesContent.length <= 0) {
-                showUserInfo("Please add a file first");
-                return;
-            }
+        let filesContent = getFilesContent();
+        if (filesContent.length <= 0) {
+            showUserInfo("Please add a file first");
+            return;
+        }
 
-            let formData = new FormData();
-            filesContent.forEach(element => {
-                formData.append('files[]', element);
-            });
-            
-            fetch('/multipart', {
+        let formData = new FormData();
+        filesContent.forEach(element => {
+            formData.append('files[]', element);
+        });
+
+        fetch('/multipart', {
                 method: 'POST',
                 body: formData,
             })
