@@ -41,36 +41,37 @@ function pageSetup() {
     });
 
     document.getElementById('submit-button').addEventListener('click', function(event) {
-        if(fileNamesAreValid()){
-            let filesContent = getFilesContent();
-            if (filesContent.length <= 0) {
-                showUserInfo("Please add a file first");
-                return;
-            }
+        if(!fileNamesAreValid()){
+            return;
+        }
+        let filesContent = getFilesContent();
+        if (filesContent.length <= 0) {
+            showUserInfo("Please add a file first");
+            return;
+        }
 
-            let formData = new FormData();
-            filesContent.forEach(element => {
-                formData.append('files[]', element);
+        let formData = new FormData();
+        filesContent.forEach(element => {
+            formData.append('files[]', element);
+        });
+
+        fetch('/multipart', {
+                method: 'POST',
+                body: formData,
+            })
+            .then(
+                response => {
+                    if (response.ok) {
+                        downloadURL(response.url, "nm-migrated.tar")
+                    } else {
+                        response.text().then(body => showUserInfo(body)).catch(e => showUserInfo(e));
+                    }
+                }
+            ).catch(error => {
+                showUserInfo("Network error occurred. Please try again.");
             });
 
-            fetch('/multipart', {
-                    method: 'POST',
-                    body: formData,
-                })
-                .then(
-                    response => {
-                        if (response.ok) {
-                            downloadURL(response.url, "nm-migrated.tar")
-                        } else {
-                            response.text().then(body => showUserInfo(body)).catch(e => showUserInfo(e));
-                        }
-                    }
-                ).catch(error => {
-                    showUserInfo("Network error occurred. Please try again.");
-                });
-
-            showUserInfo("");
-        }
+        showUserInfo("");
     });
 }
 
@@ -234,8 +235,8 @@ function fileNamesAreValid(){
             invalidNames.push(filename);        
         }
     }
-    if(invalidNames.length>0){
-        alert("Invalid file names:\n" + invalidNames.join('\n') + "\nvalid name example: ifcfg-something or something.xml")
+    if(invalidNames.length > 0){
+        alert("Invalid file names:\n" + invalidNames.join('\n') + "\nvalid name example: ifcfg-interfacename or something.xml")
         return false;
     }
     else{
