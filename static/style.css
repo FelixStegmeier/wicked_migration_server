@@ -33,6 +33,9 @@ main {
 }
 
 #content {
+    display: flex;
+    flex-direction: row;
+
     margin-left: 20px;
     margin-right: 20px;
     margin-bottom: auto;
@@ -101,9 +104,15 @@ h3 {
     color: #333;
     margin-bottom: 20px;
 }
-
+#migration-result-container{
+    /* display: none; */
+    margin-top: 20px;
+    margin-left: 20px;
+    width: 50%;
+}
 #input-container {
     margin-top: 20px;
+    width: 50%;
 }
 
 pre {
