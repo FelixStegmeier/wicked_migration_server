@@ -41,46 +41,51 @@ function pageSetup() {
     });
 
     document.getElementById('submit-button').addEventListener('click', function(event) {
-        if(fileNamesAreValid() && alertIfFileContainsPassword()){
 
-            let files = returnDocumentTextAsFiles();
+        if(!fileNamesAreValid()){
+            return;
+        }
 
-            if (files.length <= 0) {
-                showUserInfo("Please add a file first");
-                return;
-            }
+        if(!alertIfFileContainsPassword()){
+            return;
+        }
 
+        let filesContent = getFilesContent();
+        if (filesContent.length <= 0) {
+            showUserInfo("Please add a file first");
+            return;
+        }
 
-            let formData = new FormData();
-            files.forEach(element => {
-                formData.append('files[]', element);
-            });
-            
-            fetch('/web', {
-                method: 'POST',
-                body: formData,
+        let formData = new FormData();
+        files.forEach(element => {
+            formData.append('files[]', element);
+        });
+
+        fetch('/web', {
+            method: 'POST',
+            body: formData,
+        })
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
+                } else {
+                    throw new Error('Something went wrong');
+                }
             })
-                .then(response => {
-                    if (response.ok) {
-                        return response.json();
-                    } else {
-                        throw new Error('Something went wrong');
-                    }
-                })
-                .then(json => {
-                    clearFiles('file-result-container', 'file-placeholder-result');
-                    let parsed_json = JSON.parse(json);
-                    showUserInfo(parsed_json.log)
-                    parsed_json.files.forEach(file => 
-                    {
-                        createAndAddConfiguredFiles(file.fileName, file.fileContent);
-                    }
-                    )
-                })
-                .catch(error => {
-                    showUserInfo("Network error occurred. Please try again.");
-                });
-            showUserInfo("");
+            .then(json => {
+                clearFiles('file-result-container', 'file-placeholder-result');
+                let parsed_json = JSON.parse(json);
+                showUserInfo(parsed_json.log)
+                parsed_json.files.forEach(file => 
+                {
+                    createAndAddConfiguredFiles(file.fileName, file.fileContent);
+                }
+                )
+            })
+            .catch(error => {
+                showUserInfo("Network error occurred. Please try again.");
+            });
+        showUserInfo("");
         }
     });
 }
@@ -295,8 +300,9 @@ function fileNamesAreValid(){
             invalidNames.push(filename);        
         }
     }
-    if(invalidNames.length>0){
-        alert("Invalid file names:\n" + invalidNames.join('\n') + "\nvalid name example: ifcfg-something or something.xml")
+
+    if(invalidNames.length > 0){
+        alert("Invalid file names:\n" + invalidNames.join('\n') + "\nvalid name example: ifcfg-interfacename or something.xml")
         return false;
     }
     else{
@@ -308,4 +314,22 @@ function fileNamesAreValid(){
     
         return regex1.test(filename) || regex2.test(filename);
     }
+}
+
+function alertIfFileContainsPassword() {
+    passwords = []
+    let regex = /PASSWORD='.+'/i;
+
+    for (let child of getFiles(document.getElementById('file-container'))) {
+        let fileText = child.querySelector('#file-content-textarea').value;
+        if (regex.test(fileText)){
+            passwords.push(regex.exec(fileText));
+        }
+    }
+
+    if(passwords.length > 0){
+    let pswd_str = passwords.join(' ');
+        return confirm("You have password(s) in your file. Consider removing it: " + pswd_str + "\n\nThis will be sent to the server, do you want to continue anyway?");
+    }
+    return true;
 }
