@@ -239,7 +239,7 @@ function alertIfFileContainsPassword() {
 
     if(passwords.length > 0){
     let pswd_str = passwords.join(' ');
-        return confirm("You have have a password/s in your file. Consider removing it: " + pswd_str + "\n Continue anyway?");
+        return confirm("You have password(s) in your file. Consider removing it: " + pswd_str + "\nContinue anyway?");
     }
     return true;
 
