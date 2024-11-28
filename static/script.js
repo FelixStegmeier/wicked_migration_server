@@ -41,6 +41,11 @@ function pageSetup() {
     });
 
     document.getElementById('submit-button').addEventListener('click', function(event) {
+
+        if(!fileNamesAreValid()){
+            return;
+        }
+
         if(!alertIfFileContainsPassword()){
             return;
         }
@@ -225,6 +230,30 @@ function downloadURL(url, name) {
     link.click();
     document.body.removeChild(link);
     delete link;
+}
+
+function fileNamesAreValid(){
+    let invalidNames = []
+
+    for (let child of getFiles(document.getElementById('file-container'))) {
+        let filename = child.querySelector('#file-name').value;
+        if(!checkFilenameValidity(filename)){
+            invalidNames.push(filename);        
+        }
+    }
+    if(invalidNames.length > 0){
+        alert("Invalid file names:\n" + invalidNames.join('\n') + "\nvalid name example: ifcfg-interfacename or something.xml")
+        return false;
+    }
+    else{
+        return true;
+    }
+    function checkFilenameValidity(filename) {
+        let regex1 = /ifcfg-.+/i;
+        let regex2 = /.+\.xml/i;
+    
+        return regex1.test(filename) || regex2.test(filename);
+    }
 }
 
 function alertIfFileContainsPassword() {
