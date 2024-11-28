@@ -258,7 +258,7 @@ function fileNamesAreValid(){
 
 function alertIfFileContainsPassword() {
     passwords = []
-    let regex = /PASSWORD='.+'/i;
+    let regex = /<passphrase>.+<\/passphrase>|PASSWORD='.+'/i;
 
     for (let child of getFiles(document.getElementById('file-container'))) {
         let fileText = child.querySelector('#file-content-textarea').value;
