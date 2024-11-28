@@ -41,7 +41,9 @@ function pageSetup() {
     });
 
     document.getElementById('submit-button').addEventListener('click', function(event) {
-        if(alertIfFileContainsPassword()){
+        if(!alertIfFileContainsPassword()){
+            return;
+        }
 
             let filesContent = getFilesContent();
             if (filesContent.length <= 0) {
@@ -71,7 +73,6 @@ function pageSetup() {
             });
 
         showUserInfo("");
-    }
     });
 }
 
@@ -232,8 +233,8 @@ function alertIfFileContainsPassword() {
 
     for (let child of getFiles(document.getElementById('file-container'))) {
         let fileText = child.querySelector('#file-content-textarea').value;
-        if (checkPswd(fileText, regex)){
-            passwords.push(pswdsFound(fileText, regex));
+        if (regex.test(fileText)){
+            passwords.push(regex.exec(fileText));
         }
     }
 
@@ -242,11 +243,4 @@ function alertIfFileContainsPassword() {
         return confirm("You have password(s) in your file. Consider removing it: " + pswd_str + "\nContinue anyway?");
     }
     return true;
-
-    function checkPswd(inputText, regex) {
-        return regex.test(inputText);
-    }
-    function pswdsFound(inputText, regex){
-        return regex.exec(inputText);
-    }
 }
