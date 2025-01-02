@@ -229,7 +229,7 @@ function downloadURL(url, name) {
 
 function alertIfFileContainsPassword() {
     passwords = []
-    let regex = /<passphrase>.+<\/passphrase>|PASSWORD=.+|<password>.+<\/password>|<client-key-passwd>.+<\/client-key-passwd>|<key>.+<\/key>|<modem-pin>.+<\/modem-pin>/gm;
+    let regex = /<passphrase>.+<\/passphrase>|PASSWORD=.+|<password>.+<\/password>|<client-key-passwd>.+<\/client-key-passwd>|<key>.+<\/key>|<modem-pin>.+<\/modem-pin>|WIRELESS_WPA_PASSWORD=.+|WIRELESS_WPA_PSK=.+|WIRELESS_KEY_\[.+\]|WIRELESS_CLIENT_KEY_PASSWORD=.+/gm;
 
     for (let child of getFiles(document.getElementById('file-container'))) {
         let fileText = child.querySelector('#file-content-textarea').value;
