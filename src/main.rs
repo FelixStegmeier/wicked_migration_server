@@ -466,10 +466,6 @@ struct AppState {
     database: Arc<Mutex<Connection>>,
 }
 
-async fn browser_html() -> Response {
-    axum::response::Html(fs::read_to_string("static/main.html").unwrap()).into_response()
-}
-
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
@@ -508,12 +504,14 @@ async fn main() {
 
     let app_state = AppState { database: db_data };
 
+
     let app = Router::new()
         .route("/:uuid", get(return_config_file))
         .route("/json/:uuid", get(return_config_json))
         .route("/multipart", post(redirect_post_multipart_form))
         .route("/json", post(redirect_post_multipart_form))
-        .nest_service("/migration", axum::routing::get_service(ServeDir::new("static/")),)
+        .route("/", axum::routing::get_service(ServeDir::new("static/")))
+        .fallback_service(ServeDir::new("static/"))
         .route("/", post(redirect))
         .with_state(app_state);
 
