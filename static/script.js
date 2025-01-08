@@ -258,17 +258,17 @@ function fileNamesAreValid(){
 
 function alertIfFileContainsPassword() {
     passwords = []
-    let regex = /PASSWORD='.+'/i;
+    let regex = /<passphrase>.+?<\/passphrase>|<password>.+?<\/password>|<client-key-passwd>.+?<\/client-key-passwd>|<key>.+?<\/key>|<modem-pin>.+?<\/modem-pin>|WIRELESS_WPA_PASSWORD=.+?$|WIRELESS_WPA_PSK=.+?$|WIRELESS_KEY_[0-3]=.+?$|WIRELESS_CLIENT_KEY_PASSWORD=.+?$|PASSWORD=.+?$/gms;
 
     for (let child of getFiles(document.getElementById('file-container'))) {
         let fileText = child.querySelector('#file-content-textarea').value;
         if (regex.test(fileText)){
-            passwords.push(regex.exec(fileText));
+            passwords.push(...fileText.match(regex));
         }
     }
 
     if(passwords.length > 0){
-    let pswd_str = passwords.join(' ');
+        let pswd_str = passwords.join('\n');
         return confirm("You have password(s) in your file. Consider removing it: " + pswd_str + "\n\nThis will be sent to the server, do you want to continue anyway?");
     }
     return true;
