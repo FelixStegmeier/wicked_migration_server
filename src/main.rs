@@ -181,12 +181,13 @@ async fn redirect_post_mulipart_form(
             .unwrap();
     }
 
-    let path = match migrate(data_array) {
-        Ok(path) => path,
+    let migration_result = match migrate(data_array) {
+        Ok(migration_result) => migration_result,
         Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
 
-    let uuid = match create_and_add_row(path, &database) {
+
+    let uuid = match create_and_add_row(migration_result.0.path().to_string_lossy().to_string(), &database) {
         Ok(uuid) => uuid,
         Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
@@ -200,82 +201,66 @@ async fn redirect(State(shared_state): State<AppState>, data_string: String) -> 
         file_name: "wicked.xml".to_string(),
         file_type: FileType::Xml,
     }];
-    let path = match migrate(data_arr) {
-        Ok(path) => path,
+    let migration_result = match migrate(data_arr) {
+        Ok(migration_result) => migration_result,
         Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
 
-    let uuid = match create_and_add_row(path, &database) {
+    let uuid = match create_and_add_row(migration_result.0.path().to_string_lossy().to_string(), &database) {
         Ok(uuid) => uuid,
         Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
     axum::response::Redirect::to(format!("/{}", uuid).as_str()).into_response()
 }
 
-fn migrate(data_arr: Vec<File>) -> Result<String, anyhow::Error> {
-    let output_tmpfile: tempfile::NamedTempFile = tempfile::Builder::new()
-        .prefix("nm-migrated.")
-        .suffix(".tar")
-        .keep(true)
-        .tempfile()?;
-
-    let output_path_str: &str = match output_tmpfile.path().to_str() {
-        Some(output_path_str) => output_path_str,
-        None => return Err(anyhow::anyhow!("Failed to convert path to string")),
-    };
-
-    let migration_target_tmpdir: tempfile::TempDir = tempdir()?;
-
-    for file in &data_arr {
+fn create_and_write_to_file(
+    files: &Vec<File>,
+    migration_target_tmpdir: &tempfile::TempDir,
+) -> Result<(), anyhow::Error> {
+    for file in files {
         let input_file_path = migration_target_tmpdir.path().join(&file.file_name);
         fs::File::create_new(&input_file_path)?;
         std::fs::write(&input_file_path, file.file_content.as_bytes())?;
     }
+    Ok(())
+}
 
-    let arguments_str = if data_arr[0].file_type == FileType::Ifcfg {
+//migrates the files and returns the output for logging in the result
+fn migrate_files(
+    files: &Vec<File>,
+    migration_target_tmpdir: &tempfile::TempDir,
+) -> Result<std::process::Output, anyhow::Error> {
+    create_and_write_to_file(files, migration_target_tmpdir)?;
+    let arguments_str = if files[0].file_type == FileType::Ifcfg {
         format!(
             "run -e \"MIGRATE_WICKED_CONTINUE_MIGRATION=true\" --rm -v {}:/etc/sysconfig/network:z {}",
             migration_target_tmpdir.path().display(),
-            REGISTRY_URL
+                REGISTRY_URL
         )
     } else {
-        format!("run --rm -v {}:/migration-tmpdir:z {} bash -c 
-            \"migrate-wicked migrate -c /migration-tmpdir/ && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated\"", 
+        format!("run --rm -v {}:/migration-tmpdir:z {} bash -c
+            \"migrate-wicked migrate -c /migration-tmpdir/ && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated\"",
             migration_target_tmpdir.path().display(),
-            REGISTRY_URL,
+                REGISTRY_URL,
         )
     };
 
-    let output = Command::new("podman")
-        .args(shlex::split(&arguments_str).unwrap())
-        .output()?;
+    let output: std::process::Output = Command::new("podman")
+    .args(shlex::split(&arguments_str).unwrap())
+    .output()?;
 
     if cfg!(debug_assertions) {
         println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
     }
-    let migrated_file_location =
-        format!("{}/NM-migrated", migration_target_tmpdir.path().display());
+    Ok(output)
+}
 
-    let command_output = Command::new("tar")
-        .arg("cf")
-        .arg(output_path_str)
-        .arg("-C")
-        .arg(&migrated_file_location)
-        .arg(".")
-        .output()?;
+fn migrate(files: Vec<File>) -> Result<(tempfile::TempDir, Vec<u8>), anyhow::Error> {
+    let migration_target_tmpdir: tempfile::TempDir = tempdir()?;
 
-    if cfg!(debug_assertions) {
-        println!(
-            "stdout: {}",
-            String::from_utf8_lossy(&command_output.stdout)
-        );
-        println!(
-            "stderr: {}",
-            String::from_utf8_lossy(&command_output.stderr)
-        );
-    }
+    let output: std::process::Output = migrate_files(&files, &migration_target_tmpdir)?;
 
-    Ok(output_path_str.to_string())
+    Ok((migration_target_tmpdir, output.stderr))
 }
 
 async fn rm_file_after_expiration(database: &Arc<Mutex<Connection>>) -> Result<(), anyhow::Error> {
