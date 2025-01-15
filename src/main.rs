@@ -144,9 +144,6 @@ async fn return_config_json(uuid: OriginalUri, State(shared_state): State<AppSta
 
     let path_log: (String, String) =
         read_from_db(uuid_stripped_of_prefix.clone(), &database).unwrap();
-    println!("path: {}\n\n{}", path_log.0, path_log.1);
-
-    println!("path: {}", path_log.0);
 
     let json_string = generate_json(
         &path_log.1,
@@ -177,13 +174,20 @@ async fn return_config_file(uuid: OriginalUri, State(shared_state): State<AppSta
         None => uuid.to_string(),
     };
 
-    let path_log: (String, String) =
-        read_from_db(uuid_stripped_of_prefix.clone(), &database).unwrap();
+    let path_log: (String, String) = match read_from_db(uuid_stripped_of_prefix.clone(), &database)
+    {
+        Ok(path_log) => path_log,
+        Err(e) => {
+            eprint!("Error when attempting to retrieve entry from DB: {e}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
 
     let file_contents = match get_file_contents(std::path::Path::new(&path_log.0).to_path_buf()) {
         Ok(file_contents) => file_contents,
-        Err(_e) => {
-            return StatusCode::BAD_REQUEST.into_response();
+        Err(e) => {
+            eprintln!("Error when attempting to read migrated file: {e}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     };
 
@@ -192,12 +196,11 @@ async fn return_config_file(uuid: OriginalUri, State(shared_state): State<AppSta
         Err(e) => eprint!("Error when removing directory {}: {}", path_log.0, e),
     };
     drop(database);
-
     file_contents.into_response()
 }
 
 fn get_file_contents(path: std::path::PathBuf) -> Result<String, anyhow::Error> {
-    let contents = std::fs::read_to_string(path)?;
+    let contents = std::fs::read_to_string(path.join("wicked.xml"))?;
     Ok(contents.to_string())
 }
 
@@ -334,6 +337,7 @@ async fn redirect(State(shared_state): State<AppState>, data_string: String) -> 
         Ok(uuid) => uuid,
         Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
+
     axum::response::Redirect::to(format!("/{}", uuid).as_str()).into_response()
 }
 
@@ -375,7 +379,7 @@ fn migrate_files(
         .output()?;
 
     if cfg!(debug_assertions) {
-        println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+        eprintln!("stderr: {}", String::from_utf8_lossy(&output.stderr));
     }
     Ok(output)
 }
@@ -482,6 +486,7 @@ async fn main() {
         .route("/", get(browser_html))
         .route_service("/style.css", ServeFile::new("static/style.css"))
         .route_service("/script.js", ServeFile::new("static/script.js"))
+        .route_service("/tar_writer.js", ServeFile::new("static/tar_writer.js"))
         .route("/multipart", post(redirect_post_multipart_form))
         .route("/json", post(redirect_post_multipart_form))
         .route("/", post(redirect))

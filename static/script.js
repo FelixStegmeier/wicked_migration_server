@@ -1,3 +1,5 @@
+import TarWriter from './tar_writer.js';
+
 pageSetup();
 
 function pageSetup() {
@@ -36,41 +38,88 @@ function pageSetup() {
     });
 
     document.getElementById('reset-files-button').addEventListener('click', function(event) {
-        clearFiles();
+        clearFiles('file-container', 'file-placeholder');
         showUserInfo("");
     });
 
     document.getElementById('submit-button').addEventListener('click', function(event) {
-        let filesContent = getFilesContent();
+        let files = getFilesContent();
 
-        if (filesContent.length <= 0) {
+        if (files.length <= 0) {
             showUserInfo("Please add a file first");
             return;
         }
-
         let formData = new FormData();
-        filesContent.forEach(element => {
+        files.forEach(element => {
             formData.append('files[]', element);
         });
 
-        fetch('/multipart', {
-                method: 'POST',
-                body: formData,
-            })
-            .then(
-                response => {
-                    if (response.ok) {
-                        downloadURL(response.url, "nm-migrated.tar")
-                    } else {
-                        response.text().then(body => showUserInfo(body)).catch(e => showUserInfo(e));
+        fetch('/json', {
+            method: 'POST',
+            body: formData,
+        }).then(response => {
+            if (response.ok) {
+                response.json().then(json => {
+                    clearFiles('file-result-container', 'file-placeholder-result');
+                    let parsed_json = JSON.parse(json);
+                    console.log(parsed_json);
+
+                    showUserInfo(parsed_json.log)
+                    parsed_json.files.forEach(file =>
+                    {
+                        createAndAddConfiguredFiles(file.fileName, file.fileContent);
                     }
-                }
-            ).catch(error => {
-                showUserInfo("Network error occurred. Please try again.");
-            });
+                    )
+                    showOrHideConfiguredFiles();
+                })
+                .catch(error => {
+                    showUserInfo("Network error occurred. Please try again.");
+                });;
+            }
+            else {
+                response.text().then(data => {
+                    showUserInfo("An error occured:\n"+ data);
+                });
+            }
+        })
 
         showUserInfo("");
+
+        document.getElementById('download-wicked-files-button').addEventListener('click', function(event) {
+            downloadFiles();
+        });
     });
+}
+
+function showOrHideConfiguredFiles(){
+    if (configuratedContentIsEmpty()){
+        hideConfigurationResult()
+    }
+    else{
+        showConfigurationResult()
+    }
+}
+let downloadButtonDisabled = true;
+function showConfigurationResult(){
+    downloadButtonDisabled = false;
+    document.getElementById('download-wicked-files-button').style.backgroundColor = "#4CAF50";
+    document.getElementById('input-container').style.width = "50%";
+    document.getElementById('migration-result-container').style.width = "50%";
+    document.getElementById('migration-result-container').style.visibility= "visible";
+}
+function hideConfigurationResult(){
+    downloadButtonDisabled = true;
+    document.getElementById('download-wicked-files-button').style.backgroundColor = "#8b958c";
+    document.getElementById('input-container').style.width = "100%";
+    document.getElementById('migration-result-container').style.width = "0%";
+    document.getElementById('migration-result-container').style.visibility= "hidden";
+}
+
+function configuratedContentIsEmpty() {
+    if (getFiles(document.getElementById('file-result-container')).length > 0) {
+        return false;
+    }
+    return true;
 }
 
 function showUserInfo(text) {
@@ -107,6 +156,25 @@ function getFilesContent() {
     return files;
 }
 
+async function downloadFiles() {
+    if (downloadButtonDisabled){
+        return
+    }
+    const tar_writer = new TarWriter();
+    tar_writer.addFolder('wicked');
+    for (let child of getFiles(document.getElementById('file-result-container'))) {
+        tar_writer.addFile('wicked/' + child.querySelector('#file-name').value, child.querySelector('#file-content-textarea').value);
+    }
+    const output = await tar_writer.write();
+    const fileURL = URL.createObjectURL(output);
+    const downloadLink = document.createElement('a');
+    downloadLink.href = fileURL;
+    downloadLink.download = 'wicked.tar';
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    URL.revokeObjectURL(fileURL);
+}
+
 function autoResize(textarea) {
     textarea.style.height = "auto";
     textarea.style.height = textarea.scrollHeight + 'px';
@@ -138,12 +206,14 @@ function handleDrop(e) {
     setFileDividers(document.getElementById('file-container'));
 }
 
+//Adds the file to the dom if it isnt already
 function addFile(newFile) {
     if (!newFileAlreadyExists(newFile)) {
         createAndAdd(newFile);
     }
 }
 
+//Adds the recieved file to the dom
 function createAndAdd(newFile) {
     const templateRef = document.getElementById("file-template");
     let node = templateRef.content.cloneNode(true);
@@ -155,7 +225,7 @@ function createAndAdd(newFile) {
         let element = event.target.closest("#file");
         element.parentNode.removeChild(element);
         setFileDividers(document.getElementById('file-container'));
-        showOrHideFilePlaceholder();
+        showOrHideFilePlaceholder('file-container', 'file-placeholder');
     });
 
     node.querySelector("#file-name").value = newFile.name;
@@ -171,7 +241,31 @@ function createAndAdd(newFile) {
     let fileContainer = document.getElementById('file-container');
     fileContainer.appendChild(node);
 
-    showOrHideFilePlaceholder();
+    showOrHideFilePlaceholder('file-container', 'file-placeholder');
+}
+
+function createAndAddConfiguredFiles(fileName, fileContent) {
+    const templateRef = document.getElementById("file-template");
+    let node = templateRef.content.cloneNode(true);
+
+    const fileTextArea = node.querySelector("#file-content-textarea");
+    fileTextArea.style.height = fileTextArea.scrollHeight + 'px';
+
+    node.querySelector('#remove-button').addEventListener('click', function(event) {
+        let element = event.target.closest("#file");
+        element.parentNode.removeChild(element);
+        setFileDividers(document.getElementById('file-result-container'));
+        showOrHideFilePlaceholder('file-result-container', 'file-placeholder-result');
+        showOrHideConfiguredFiles();
+    });
+
+    node.querySelector("#file-name").value = fileName;
+    fileTextArea.value = fileContent;
+
+    let fileContainer = document.getElementById('file-result-container');
+    fileContainer.appendChild(node);
+
+    showOrHideFilePlaceholder('file-result-container', 'file-placeholder-result');
 }
 
 // Returns an array containing only all file elements of node
@@ -195,8 +289,9 @@ function setFileDividers(node) {
 }
 
 // If there are no files present a placeholder is shown, otherwise it gets hidden
-function showOrHideFilePlaceholder() {
-    document.getElementById('file-placeholder').hidden = getFiles(document.getElementById('file-container')).length != 0;
+function showOrHideFilePlaceholder(target, placeholder) {
+    setFileDividers(document.getElementById(target));
+    document.getElementById(placeholder).hidden = getFiles(document.getElementById(target)).length != 0;
 }
 
 function newFileAlreadyExists(newFile) {
@@ -209,17 +304,17 @@ function newFileAlreadyExists(newFile) {
     return false;
 }
 
-function clearFiles() {
-    document.getElementById('file-container').innerHTML = "";
-    showOrHideFilePlaceholder();
+function clearFiles(target, placeholder) {
+    document.getElementById(target).innerHTML = "";
+    showOrHideFilePlaceholder(target, placeholder);
 }
 
 function downloadURL(url, name) {
-    let link = document.createElement("a");
+    const link = document.createElement("a");
     link.download = name;
     link.href = url;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    delete link;
+    URL.revokeObjectURL(link);
 }

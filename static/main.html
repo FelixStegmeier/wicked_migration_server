@@ -4,7 +4,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
+  
+  <link rel="icon" href="data:,">
   <link rel="stylesheet" type="text/css" href="style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" />
 </head>
@@ -14,31 +15,48 @@
     <h1>Wicked to NetworkManager</h1>
   </header>
   <div id="content">
-    <div id="input-container">
-      <div id="files-header">
-        <h3>Wicked configuration files</h3>
-        <div id="files-header-buttons">
-          <label for="file-upload" class="custom-button">Upload files</label>
-          <input id="file-upload" type="file" multiple />
-          <label for="reset-files-button" class="custom-button">Reset files</label>
-          <button id="reset-files-button">Reset files</button>
-        </div>
-      </div>
-      <div id="drop-area">
-        <div class="center-container" id="file-placeholder">
-          <div class="center-element">
-            <i class="placeholder fa-solid fa-file" id="file-placeholder-icon"></i>
-            <p class="placeholder">Drop ifcfg-* or .xml files here</p>
+    <div id="migration-files">
+      <div id="input-container">
+        <div id="files-header">
+          <h3>Wicked configuration files</h3>
+          <div id="files-header-buttons">
+            <label for="file-upload" class="custom-button">Upload files</label>
+            <input id="file-upload" type="file" multiple />
+            <label for="reset-files-button" class="custom-button">Reset files</label>
+            <button id="reset-files-button">Reset files</button>
           </div>
         </div>
-        <div id="file-container">
+        <div id="drop-area">
+          <div class="center-container" id="file-placeholder">
+            <div class="center-element">
+              <i class="placeholder fa-solid fa-file" id="file-placeholder-icon"></i>
+              <p class="placeholder">Drop ifcfg-* or .xml files here</p>
+            </div>
+          </div>
+          <div id="file-container">
+          </div>
         </div>
       </div>
-      <div id="migration-container">
-        <pre id="user-info"></pre>
-        <div>
-          <button type="submit" id="submit-button">Migrate</button>
+
+      <div id="migration-result-container">
+        <div id="files-header">
+          <h3>Configured files</h3>
         </div>
+        <div id="drop-area">
+          <div class="center-container" id="file-placeholder-result">
+            <div class="center-element">
+            </div>
+          </div>
+          <div id="file-result-container">
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="migration-container">
+      <pre id="user-info"></pre>
+      <div>
+        <button type="submit" id="submit-button">Migrate</button>
+        <button type="submit" id="download-wicked-files-button">Download wicked files</button>
       </div>
     </div>
   </div>
@@ -74,7 +92,7 @@
     </div>
   </template>
 
-  <script src="script.js"></script>
+  <script type="module" src="script.js"></script>
 </body>
 
 </html>
