@@ -1,4 +1,4 @@
-use axum::extract::{Multipart, Path, State};
+use axum::extract::{Multipart, OriginalUri, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
@@ -12,7 +12,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
-use tempfile::{self, tempdir};
 use tokio::sync::Mutex;
 use tower_http::services::ServeFile;
 
@@ -45,40 +44,155 @@ struct File {
     file_type: FileType,
 }
 
-fn get_file_path_from_db(uuid: &str, database: &Connection) -> anyhow::Result<String> {
-    let mut select_stmt = database
-        .prepare(format!("SELECT file_path FROM {} WHERE uuid = (?1)", TABLE_NAME).as_str())?;
-
-    let file_path = select_stmt.query_row([&uuid], |row| Ok(row.get(0)))?;
-    Ok(file_path?)
+fn delete_file_from_db(path: &str, uuid: &str, database: &Connection) -> anyhow::Result<()> {
+    let mut stmt: rusqlite::Statement<'_> =
+        database.prepare(format!("DELETE FROM {} WHERE uuid = (?1)", TABLE_NAME).as_str())?;
+    stmt.execute([uuid])?;
+    std::fs::remove_dir_all(path)?;
+    Ok(())
 }
 
-async fn return_config_file_get(
-    Path(path): Path<String>,
-    State(shared_state): State<AppState>,
+fn migrate_files_write_to_db_return_uuid(
+    redirect_path: String,
+    files: Vec<File>,
+    database: &Connection,
 ) -> Response {
-    let database = shared_state.database.lock().await;
-    let file_path = match get_file_path_from_db(
-        &std::path::PathBuf::from_str(&path)
-            .unwrap()
-            .display()
-            .to_string(),
-        &database,
+    let migration_result = match migrate(files) {
+        Ok(migration_result) => migration_result,
+        Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+
+    let uuid = match add_migration_result_to_db(
+        migration_result.0,
+        match String::from_utf8(migration_result.1) {
+            Ok(log) => log,
+            Err(e) => {
+                eprint!("Log was not utf8 encoded: {}", e);
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        },
+        database,
     ) {
-        Ok(file_path) => file_path,
-        Err(_e) => {
-            return StatusCode::BAD_REQUEST.into_response();
-        }
+        Ok(uuid) => uuid,
+        Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+    axum::response::Redirect::to(format!("{}/{}", redirect_path, uuid).as_str()).into_response()
+}
+
+fn read_from_db(uuid: String, database: &Connection) -> anyhow::Result<(String, String)> {
+    let mut select_stmt = database.prepare(
+        format!(
+            "SELECT file_path, log from {} WHERE uuid = (?1)",
+            TABLE_NAME
+        )
+        .as_str(),
+    )?;
+
+    let path_log = select_stmt.query_row([&uuid], |row| Ok((row.get(0)?, row.get(1)?)))?;
+    Ok(path_log)
+}
+
+fn generate_json(log: &str, files: Vec<File>) -> String {
+    let mut data = json::JsonValue::new_object();
+    data["log"] = log.into();
+    data["files"] = json::JsonValue::new_array();
+    for file in files {
+        let mut file_data = json::JsonValue::new_object();
+        file_data["fileName"] = file.file_name.into();
+        file_data["fileContent"] = file.file_content.into();
+        data["files"].push(file_data).unwrap();
+    }
+    data.dump()
+}
+
+fn file_arr_from_path(dir_path: String) -> Result<Vec<File>, anyhow::Error> {
+    let mut file_arr: Vec<File> = vec![];
+
+    let dir = match fs::read_dir(dir_path.clone() + "/NM-migrated/system-connections") {
+        Ok(dir) => dir,
+        Err(_e) => fs::read_dir(dir_path + "/NM-migrated")?,
+    };
+
+    for dir_entry in dir {
+        let path = dir_entry?.path();
+        let file_type = match path.extension() {
+            Some(file_type) => match file_type.to_str().unwrap() {
+                "xml" => FileType::Xml,
+                _ => FileType::Ifcfg,
+            },
+            None => {
+                return Err(anyhow::anyhow!("File extension was not recognized"));
+            }
+        };
+        let file_contents = std::fs::read(&path).unwrap();
+        file_arr.push(File {
+            file_content: String::from_utf8(file_contents).unwrap(),
+            file_name: path.file_name().unwrap().to_str().unwrap().to_owned(),
+            file_type,
+        });
+    }
+    Ok(file_arr)
+}
+
+async fn return_config_json(uuid: OriginalUri, State(shared_state): State<AppState>) -> Response {
+    let database = shared_state.database.lock().await;
+
+    let uuid_stripped_of_prefix = match uuid.to_string().strip_prefix("/json/") {
+        Some(uri) => uri.to_owned(),
+        None => uuid.to_string(),
+    };
+
+    let path_log: (String, String) =
+        read_from_db(uuid_stripped_of_prefix.clone(), &database).unwrap();
+    println!("path: {}\n\n{}", path_log.0, path_log.1);
+
+    println!("path: {}", path_log.0);
+
+    let json_string = generate_json(
+        &path_log.1,
+        match file_arr_from_path(path_log.0.clone()) {
+            Ok(file_arr) => file_arr,
+            Err(e) => {
+                eprint!("Could not retrieve files from path {}: {}", path_log.0, e);
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        },
+    );
+
+    match delete_file_from_db(&path_log.0, &uuid_stripped_of_prefix, &database) {
+        Ok(()) => (),
+        Err(e) => eprint!("Error when removing directory {}: {}", path_log.0, e),
     };
 
     drop(database);
 
-    let file_contents = match get_file_contents(std::path::Path::new("/tmp/").join(file_path)) {
+    axum::response::Json(json_string).into_response()
+}
+
+async fn return_config_file(uuid: OriginalUri, State(shared_state): State<AppState>) -> Response {
+    let database = shared_state.database.lock().await;
+
+    let uuid_stripped_of_prefix = match uuid.to_string().strip_prefix("/") {
+        Some(uri) => uri.to_owned(),
+        None => uuid.to_string(),
+    };
+
+    let path_log: (String, String) =
+        read_from_db(uuid_stripped_of_prefix.clone(), &database).unwrap();
+
+    let file_contents = match get_file_contents(std::path::Path::new(&path_log.0).to_path_buf()) {
         Ok(file_contents) => file_contents,
         Err(_e) => {
             return StatusCode::BAD_REQUEST.into_response();
         }
     };
+
+    match delete_file_from_db(&path_log.0, &uuid_stripped_of_prefix, &database) {
+        Ok(()) => (),
+        Err(e) => eprint!("Error when removing directory {}: {}", path_log.0, e),
+    };
+    drop(database);
+
     file_contents.into_response()
 }
 
@@ -87,7 +201,11 @@ fn get_file_contents(path: std::path::PathBuf) -> Result<String, anyhow::Error> 
     Ok(contents.to_string())
 }
 
-fn create_and_add_row(path: String, database: &Connection) -> anyhow::Result<String> {
+fn add_migration_result_to_db(
+    dir_path: String,
+    log: String,
+    database: &Connection,
+) -> anyhow::Result<String> {
     let uuid = uuid::Uuid::new_v4().to_string();
 
     let time = SystemTime::now()
@@ -97,16 +215,18 @@ fn create_and_add_row(path: String, database: &Connection) -> anyhow::Result<Str
 
     let mut add_stmt = database.prepare(
         format!(
-            "INSERT INTO {} (uuid, file_path, creation_time) VALUES (?1, ?2, ?3)",
+            "INSERT INTO {} (uuid, file_path, log, creation_time) VALUES (?1, ?2, ?3, ?4)",
             TABLE_NAME
         )
         .as_str(),
     )?;
-    add_stmt.execute([&uuid, &path, &time])?;
+
+    add_stmt.execute([&uuid, &dir_path, &log, &time])?;
     Ok(uuid)
 }
 
-async fn redirect_post_mulipart_form(
+async fn redirect_post_multipart_form(
+    uri: OriginalUri,
     State(shared_state): State<AppState>,
     mut multipart: Multipart,
 ) -> Response {
@@ -181,17 +301,11 @@ async fn redirect_post_mulipart_form(
             .unwrap();
     }
 
-    let migration_result = match migrate(data_array) {
-        Ok(migration_result) => migration_result,
-        Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-    };
-
-
-    let uuid = match create_and_add_row(migration_result.0.path().to_string_lossy().to_string(), &database) {
-        Ok(uuid) => uuid,
-        Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-    };
-    axum::response::Redirect::to(format!("/{}", uuid).as_str()).into_response()
+    if uri.to_string() == "/json" {
+        migrate_files_write_to_db_return_uuid("/json".to_string(), data_array, &database)
+    } else {
+        migrate_files_write_to_db_return_uuid("".to_string(), data_array, &database)
+    }
 }
 
 async fn redirect(State(shared_state): State<AppState>, data_string: String) -> Response {
@@ -206,7 +320,17 @@ async fn redirect(State(shared_state): State<AppState>, data_string: String) -> 
         Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
 
-    let uuid = match create_and_add_row(migration_result.0.path().to_string_lossy().to_string(), &database) {
+    let uuid = match add_migration_result_to_db(
+        migration_result.0,
+        match String::from_utf8(migration_result.1) {
+            Ok(log) => log,
+            Err(e) => {
+                eprint!("Log was not utf8 encoded: {}", e);
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        },
+        &database,
+    ) {
         Ok(uuid) => uuid,
         Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
@@ -215,10 +339,10 @@ async fn redirect(State(shared_state): State<AppState>, data_string: String) -> 
 
 fn create_and_write_to_file(
     files: &Vec<File>,
-    migration_target_tmpdir: &tempfile::TempDir,
+    migration_target_path: String,
 ) -> Result<(), anyhow::Error> {
     for file in files {
-        let input_file_path = migration_target_tmpdir.path().join(&file.file_name);
+        let input_file_path = migration_target_path.clone() + "/" + &file.file_name;
         fs::File::create_new(&input_file_path)?;
         std::fs::write(&input_file_path, file.file_content.as_bytes())?;
     }
@@ -228,26 +352,27 @@ fn create_and_write_to_file(
 //migrates the files and returns the output for logging in the result
 fn migrate_files(
     files: &Vec<File>,
-    migration_target_tmpdir: &tempfile::TempDir,
+    migration_target_path: String,
 ) -> Result<std::process::Output, anyhow::Error> {
-    create_and_write_to_file(files, migration_target_tmpdir)?;
+    create_and_write_to_file(files, migration_target_path.clone())?;
+
     let arguments_str = if files[0].file_type == FileType::Ifcfg {
         format!(
             "run -e \"MIGRATE_WICKED_CONTINUE_MIGRATION=true\" --rm -v {}:/etc/sysconfig/network:z {}",
-            migration_target_tmpdir.path().display(),
+            migration_target_path.clone(),
                 REGISTRY_URL
         )
     } else {
         format!("run --rm -v {}:/migration-tmpdir:z {} bash -c
             \"migrate-wicked migrate -c /migration-tmpdir/ && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated\"",
-            migration_target_tmpdir.path().display(),
+            migration_target_path,
                 REGISTRY_URL,
         )
     };
 
     let output: std::process::Output = Command::new("podman")
-    .args(shlex::split(&arguments_str).unwrap())
-    .output()?;
+        .args(shlex::split(&arguments_str).unwrap())
+        .output()?;
 
     if cfg!(debug_assertions) {
         println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
@@ -255,12 +380,13 @@ fn migrate_files(
     Ok(output)
 }
 
-fn migrate(files: Vec<File>) -> Result<(tempfile::TempDir, Vec<u8>), anyhow::Error> {
-    let migration_target_tmpdir: tempfile::TempDir = tempdir()?;
+fn migrate(files: Vec<File>) -> Result<(String, Vec<u8>), anyhow::Error> {
+    let migration_target_path = "/tmp/".to_owned() + &uuid::Uuid::new_v4().to_string();
+    fs::DirBuilder::new().create(&migration_target_path)?;
 
-    let output: std::process::Output = migrate_files(&files, &migration_target_tmpdir)?;
+    let output: std::process::Output = migrate_files(&files, migration_target_path.clone())?;
 
-    Ok((migration_target_tmpdir, output.stderr))
+    Ok((migration_target_path, output.stderr))
 }
 
 async fn rm_file_after_expiration(database: &Arc<Mutex<Connection>>) -> Result<(), anyhow::Error> {
@@ -280,8 +406,8 @@ async fn rm_file_after_expiration(database: &Arc<Mutex<Connection>>) -> Result<(
         let mut stmt: rusqlite::Statement<'_> =
             db.prepare(format!("DELETE FROM {} WHERE uuid = (?1)", TABLE_NAME).as_str())?;
         stmt.execute([uuid])?;
-        if let Err(e) = std::fs::remove_file(path) {
-            eprintln!("Error when removing file: {e}");
+        if let Err(e) = std::fs::remove_dir_all(path.clone()) {
+            eprintln!("Error when removing directory from {path}: {e}");
         }
     }
     Ok(())
@@ -308,6 +434,10 @@ struct AppState {
     database: Arc<Mutex<Connection>>,
 }
 
+async fn browser_html() -> Response {
+    axum::response::Html(fs::read_to_string("static/main.html").unwrap()).into_response()
+}
+
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
@@ -331,6 +461,7 @@ async fn main() {
                 "CREATE TABLE IF NOT EXISTS {} (
                 uuid TEXT PRIMARY KEY,
                 file_path TEXT NOT NULL,
+                log TEXT,
                 creation_time INTEGER
                 )",
                 TABLE_NAME
@@ -346,11 +477,13 @@ async fn main() {
     let app_state = AppState { database: db_data };
 
     let app = Router::new()
-        .route("/:uuid", get(return_config_file_get))
+        .route("/:uuid", get(return_config_file))
+        .route("/json/:uuid", get(return_config_json))
         .route("/", get(browser_html))
         .route_service("/style.css", ServeFile::new("static/style.css"))
         .route_service("/script.js", ServeFile::new("static/script.js"))
-        .route("/multipart", post(redirect_post_mulipart_form))
+        .route("/multipart", post(redirect_post_multipart_form))
+        .route("/json", post(redirect_post_multipart_form))
         .route("/", post(redirect))
         .with_state(app_state);
 
@@ -359,8 +492,4 @@ async fn main() {
         .unwrap();
 
     axum::serve(listener, app).await.unwrap();
-}
-
-async fn browser_html() -> Response {
-    axum::response::Html(fs::read_to_string("static/main.html").unwrap()).into_response()
 }
