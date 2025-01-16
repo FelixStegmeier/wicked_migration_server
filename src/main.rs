@@ -361,27 +361,7 @@ async fn redirect(State(shared_state): State<AppState>, data_string: String) -> 
         file_name: "wicked.xml".to_string(),
         file_type: FileType::Xml,
     }];
-    let migration_result = match migrate(data_arr) {
-        Ok(migration_result) => migration_result,
-        Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-    };
-
-    let uuid = match add_migration_result_to_db(
-        migration_result.0,
-        match String::from_utf8(migration_result.1) {
-            Ok(log) => log,
-            Err(e) => {
-                eprint!("Log was not utf8 encoded: {}", e);
-                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-            }
-        },
-        &database,
-    ) {
-        Ok(uuid) => uuid,
-        Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-    };
-
-    axum::response::Redirect::to(format!("/{}", uuid).as_str()).into_response()
+    migrate_files_write_to_db_return_uuid("".to_string(), data_arr, &database)
 }
 
 fn create_and_write_to_file(
