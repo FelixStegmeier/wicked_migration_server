@@ -4,7 +4,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{routing::get, Router};
 use clap::Parser;
-use core::str;
+use core::{panic, str};
 use rusqlite::Connection;
 use std::fs::{self, create_dir_all};
 use std::process::Command;
@@ -279,69 +279,33 @@ fn add_migration_result_to_db(
     Ok(uuid)
 }
 
-async fn redirect_post_multipart_form(
-    uri: OriginalUri,
-    State(shared_state): State<AppState>,
+async fn read_multipart_post_data_to_file_arr(
     mut multipart: Multipart,
-) -> Response {
-    let database: tokio::sync::MutexGuard<'_, Connection> = shared_state.database.lock().await;
+) -> Result<Vec<File>, anyhow::Error> {
     let mut data_array: Vec<File> = Vec::new();
 
     while let Some(field) = multipart.next_field().await.unwrap() {
         let file_type = match field.content_type() {
             Some(file_type) => file_type,
-            None => {
-                return Response::builder()
-                    .status(400)
-                    .header("Content-Type", "text/plain")
-                    .body("Type missing in multipart/form data".into())
-                    .unwrap()
-            }
+            None => return Err(anyhow::anyhow!("Type missing in multipart/form data")),
         };
 
-        let file_type = match FileType::from_str(file_type) {
-            Ok(file_type) => file_type,
-            Err(e) => {
-                return Response::builder()
-                    .status(400)
-                    .header("Content-Type", "text/plain")
-                    .body(format!("Error when parsing file type: {}", e).into())
-                    .unwrap()
-            }
-        };
+        let file_type = FileType::from_str(file_type)?;
 
         let file_name = match field.file_name() {
             Some(file_name) => file_name.to_string(),
             None => {
-                return Response::builder()
-                    .status(400)
-                    .header("Content-Type", "text/plain")
-                    .body("file name field missing in multipart/form data".into())
-                    .unwrap()
+                return Err(anyhow::anyhow!(
+                    "file name field missing in multipart/form data"
+                ))
             }
         };
 
-        let data = match field.bytes().await {
-            Ok(data) => data,
-            Err(e) => {
-                return Response::builder()
-                    .status(400)
-                    .header("Content-Type", "text/plain")
-                    .body(format!("Unable to read file: {}", e).into())
-                    .unwrap()
-            }
-        };
+        let data = field.bytes().await?;
 
         let file_content = match str::from_utf8(&data) {
             Ok(v) => v.to_string(),
-            Err(e) => {
-                eprint!("Invalid UTF-8 sequence: {}", e);
-                return Response::builder()
-                    .status(400)
-                    .header("Content-Type", "text/plain")
-                    .body(format!("Unable to read file: {}", e).into())
-                    .unwrap();
-            }
+            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
         };
 
         data_array.push(File {
@@ -350,6 +314,27 @@ async fn redirect_post_multipart_form(
             file_type,
         });
     }
+    Ok(data_array)
+}
+
+async fn redirect_post_multipart_form(
+    uri: OriginalUri,
+    State(shared_state): State<AppState>,
+    multipart: Multipart,
+) -> Response {
+    let database: tokio::sync::MutexGuard<'_, Connection> = shared_state.database.lock().await;
+
+    let data_array = match read_multipart_post_data_to_file_arr(multipart).await {
+        Ok(ok) => ok,
+        Err(e) => {
+            eprint!("An error occurred when trying to read incoming data: {e}");
+            return Response::builder()
+                .status(400)
+                .header("Content-Type", "text/plain")
+                .body(format!("An error occured: {}", e).into())
+                .unwrap();
+        }
+    };
 
     if !data_array
         .windows(2)
