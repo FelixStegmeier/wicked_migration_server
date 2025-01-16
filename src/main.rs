@@ -31,6 +31,7 @@ impl FromStr for FileType {
     fn from_str(file_type: &str) -> Result<Self, Self::Err> {
         match file_type {
             "text/xml" => Ok(FileType::Xml),
+            "application/xml" => Ok(FileType::Xml), //////////////////////////////////////////////////////////////////////////////////////////////
             "text/plain" => Ok(FileType::Ifcfg),
             "application/octet-stream" => Ok(FileType::Ifcfg),
             _ => Err(anyhow::anyhow!("Unsupported file type: {}", file_type)),
@@ -166,6 +167,39 @@ async fn return_config_json(uuid: OriginalUri, State(shared_state): State<AppSta
     axum::response::Json(json_string).into_response()
 }
 
+fn return_as_tar(path: String) -> anyhow::Result<tempfile::NamedTempFile> {
+    let output_tmpfile: tempfile::NamedTempFile = tempfile::Builder::new()
+        .prefix("nm-migrated.")
+        .suffix(".tar")
+        .keep(true)
+        .tempfile()?;
+
+    let output_path_str: &str = match output_tmpfile.path().to_str() {
+        Some(output_path_str) => output_path_str,
+        None => return Err(anyhow::anyhow!("Failed to convert path to string")),
+    };
+
+    let command_output = Command::new("tar")
+        .arg("cf")
+        .arg(output_path_str)
+        .arg("-C")
+        .arg(path)
+        .arg(".")
+        .output()?;
+
+    if cfg!(debug_assertions) {
+        println!(
+            "stdout: {}",
+            String::from_utf8_lossy(&command_output.stdout)
+        );
+        println!(
+            "stderr: {}",
+            String::from_utf8_lossy(&command_output.stderr)
+        );
+    }
+    Ok(output_tmpfile)
+}
+
 async fn return_config_file(uuid: OriginalUri, State(shared_state): State<AppState>) -> Response {
     let database = shared_state.database.lock().await;
 
@@ -183,24 +217,41 @@ async fn return_config_file(uuid: OriginalUri, State(shared_state): State<AppSta
         }
     };
 
-    let file_contents = match get_file_contents(std::path::Path::new(&path_log.0).to_path_buf()) {
-        Ok(file_contents) => file_contents,
+    let tar_tempfile = match return_as_tar(path_log.0.clone() + "/NM-migrated") {
+        Ok(tar_tempfile) => tar_tempfile,
         Err(e) => {
-            eprintln!("Error when attempting to read migrated file: {e}");
+            eprint!("{e}");
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     };
 
+    let file_contents = match get_file_contents(tar_tempfile.path().to_owned()) {
+        Ok(file_contents) => file_contents,
+        Err(e) => {
+            eprintln!(
+                "Error when attempting to retrieve tar from {}: {e}",
+                tar_tempfile.path().to_string_lossy()
+            );
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    match tar_tempfile.close() {
+        Ok(()) => (),
+        Err(e) => eprint!("failed to delete tempfile: {e}"),
+    };
     match delete_file_from_db(&path_log.0, &uuid_stripped_of_prefix, &database) {
         Ok(()) => (),
         Err(e) => eprint!("Error when removing directory {}: {}", path_log.0, e),
     };
+
     drop(database);
+
     file_contents.into_response()
 }
 
 fn get_file_contents(path: std::path::PathBuf) -> Result<String, anyhow::Error> {
-    let contents = std::fs::read_to_string(path.join("wicked.xml"))?;
+    let contents = std::fs::read_to_string(path)?;
     Ok(contents.to_string())
 }
 
@@ -274,16 +325,23 @@ async fn redirect_post_multipart_form(
             Ok(data) => data,
             Err(e) => {
                 return Response::builder()
-                    .status(500)
+                    .status(400)
                     .header("Content-Type", "text/plain")
-                    .body(format!("Server was unable to read file: {}", e).into())
+                    .body(format!("Unable to read file: {}", e).into())
                     .unwrap()
             }
         };
 
         let file_content = match str::from_utf8(&data) {
             Ok(v) => v.to_string(),
-            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+            Err(e) => {
+                eprint!("Invalid UTF-8 sequence: {}", e);
+                return Response::builder()
+                    .status(400)
+                    .header("Content-Type", "text/plain")
+                    .body(format!("Unable to read file: {}", e).into())
+                    .unwrap();
+            }
         };
 
         data_array.push(File {
