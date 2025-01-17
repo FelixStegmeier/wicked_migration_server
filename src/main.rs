@@ -31,7 +31,7 @@ impl FromStr for FileType {
     fn from_str(file_type: &str) -> Result<Self, Self::Err> {
         match file_type {
             "text/xml" => Ok(FileType::Xml),
-            "application/xml" => Ok(FileType::Xml), //////////////////////////////////////////////////////////////////////////////////////////////
+            "application/xml" => Ok(FileType::Xml),
             "text/plain" => Ok(FileType::Ifcfg),
             "application/octet-stream" => Ok(FileType::Ifcfg),
             _ => Err(anyhow::anyhow!("Unsupported file type: {}", file_type)),
@@ -45,11 +45,14 @@ struct File {
     file_type: FileType,
 }
 
-fn delete_file_from_db(path: &str, uuid: &str, database: &Connection) -> anyhow::Result<()> {
+///removes file from database and file system
+fn delete_file(uuid: &str, database: &Connection) -> anyhow::Result<()> {
+    std::fs::remove_dir_all(read_from_db((uuid).to_string(), database)?.0)?;
+
     let mut stmt: rusqlite::Statement<'_> =
         database.prepare(format!("DELETE FROM {} WHERE uuid = (?1)", TABLE_NAME).as_str())?;
     stmt.execute([uuid])?;
-    std::fs::remove_dir_all(path)?;
+
     Ok(())
 }
 
@@ -157,7 +160,7 @@ async fn return_config_json(uuid: OriginalUri, State(shared_state): State<AppSta
         },
     );
 
-    match delete_file_from_db(&path_log.0, &uuid_stripped_of_prefix, &database) {
+    match delete_file(&uuid_stripped_of_prefix, &database) {
         Ok(()) => (),
         Err(e) => eprint!("Error when removing directory {}: {}", path_log.0, e),
     };
@@ -240,7 +243,7 @@ async fn return_config_file(uuid: OriginalUri, State(shared_state): State<AppSta
         Ok(()) => (),
         Err(e) => eprint!("failed to delete tempfile: {e}"),
     };
-    match delete_file_from_db(&path_log.0, &uuid_stripped_of_prefix, &database) {
+    match delete_file(&uuid_stripped_of_prefix, &database) {
         Ok(()) => (),
         Err(e) => eprint!("Error when removing directory {}: {}", path_log.0, e),
     };
