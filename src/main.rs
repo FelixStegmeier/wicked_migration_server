@@ -56,25 +56,42 @@ fn delete_file(uuid: &str, database: &Connection) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn migrate_files_write_to_db_return_uuid(
+fn migrate(
     redirect_path: String,
     files: Vec<File>,
     database: &Connection,
 ) -> Response {
-    let migration_result = match migrate(files) {
-        Ok(migration_result) => migration_result,
-        Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    let migration_target_path = "/tmp/".to_owned() + &uuid::Uuid::new_v4().to_string();
+    match fs::DirBuilder::new().create(&migration_target_path) {
+        Ok(()) => (),
+        Err(e) => {
+            eprint!("Could not create directory: {}", e);
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let log = match migrate_files(&files, migration_target_path.clone()) {
+        Ok(output) => {
+            let log = String::from_utf8_lossy(&output.stderr).to_string();
+
+            if !output.status.success(){
+                return Response::builder()
+                    .status(500)
+                    .header("Content-Type", "text/plain")
+                    .body(format!("The files couldn't be migrated:\n{}", log).into())
+                    .unwrap();
+            }
+            log
+        },
+        Err(e) => {
+            eprint!("Error when migrating files: {}", e);
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
     };
 
     let uuid = match add_migration_result_to_db(
-        migration_result.0,
-        match String::from_utf8(migration_result.1) {
-            Ok(log) => log,
-            Err(e) => {
-                eprint!("Log was not utf8 encoded: {}", e);
-                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-            }
-        },
+        migration_target_path,
+        log,
         database,
     ) {
         Ok(uuid) => uuid,
@@ -351,9 +368,9 @@ async fn redirect_post_multipart_form(
     }
 
     if uri.to_string() == "/json" {
-        migrate_files_write_to_db_return_uuid("/json".to_string(), data_array, &database)
+        migrate("/json".to_string(), data_array, &database)
     } else {
-        migrate_files_write_to_db_return_uuid("".to_string(), data_array, &database)
+        migrate("".to_string(), data_array, &database)
     }
 }
 
@@ -364,7 +381,7 @@ async fn redirect(State(shared_state): State<AppState>, data_string: String) -> 
         file_name: "wicked.xml".to_string(),
         file_type: FileType::Xml,
     }];
-    migrate_files_write_to_db_return_uuid("".to_string(), data_arr, &database)
+    migrate("".to_string(), data_arr, &database)
 }
 
 fn create_and_write_to_file(
@@ -410,15 +427,6 @@ fn migrate_files(
     Ok(output)
 }
 
-fn migrate(files: Vec<File>) -> Result<(String, Vec<u8>), anyhow::Error> {
-    let migration_target_path = "/tmp/".to_owned() + &uuid::Uuid::new_v4().to_string();
-    fs::DirBuilder::new().create(&migration_target_path)?;
-
-    let output: std::process::Output = migrate_files(&files, migration_target_path.clone())?;
-
-    Ok((migration_target_path, output.stderr))
-}
-
 async fn rm_file_after_expiration(database: &Arc<Mutex<Connection>>) -> Result<(), anyhow::Error> {
     let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
     let diff = now - FILE_EXPIRATION_IN_SEC;
@@ -427,18 +435,13 @@ async fn rm_file_after_expiration(database: &Arc<Mutex<Connection>>) -> Result<(
     let mut stmt =
         db.prepare(format!("SELECT * FROM {} WHERE creation_time < (?1)", TABLE_NAME).as_str())?;
     let rows = stmt.query([diff])?;
-    let rows = rows.mapped(|row| Ok((row.get(0), row.get(1))));
+    let rows = rows.mapped(|row| Ok(row.get(0)));
 
     for row in rows {
         let row = row?;
-        let uuid: String = row.0?;
-        let path: String = row.1?;
-        let mut stmt: rusqlite::Statement<'_> =
-            db.prepare(format!("DELETE FROM {} WHERE uuid = (?1)", TABLE_NAME).as_str())?;
-        stmt.execute([uuid])?;
-        if let Err(e) = std::fs::remove_dir_all(path.clone()) {
-            eprintln!("Error when removing directory from {path}: {e}");
-        }
+        let uuid: String = row?;
+
+        delete_file(&uuid, &db)?;
     }
     Ok(())
 }
