@@ -1,4 +1,4 @@
-use axum::extract::{Multipart, OriginalUri, State};
+use axum::extract::{Multipart, OriginalUri, Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
@@ -56,11 +56,7 @@ fn delete_file(uuid: &str, database: &Connection) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn migrate(
-    redirect_path: String,
-    files: Vec<File>,
-    database: &Connection,
-) -> Response {
+fn migrate(redirect_path: String, files: Vec<File>, database: &Connection) -> Response {
     let migration_target_path = "/tmp/".to_owned() + &uuid::Uuid::new_v4().to_string();
     match fs::DirBuilder::new().create(&migration_target_path) {
         Ok(()) => (),
@@ -74,7 +70,7 @@ fn migrate(
         Ok(output) => {
             let log = String::from_utf8_lossy(&output.stderr).to_string();
 
-            if !output.status.success(){
+            if !output.status.success() {
                 return Response::builder()
                     .status(500)
                     .header("Content-Type", "text/plain")
@@ -82,18 +78,14 @@ fn migrate(
                     .unwrap();
             }
             log
-        },
+        }
         Err(e) => {
             eprint!("Error when migrating files: {}", e);
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     };
 
-    let uuid = match add_migration_result_to_db(
-        migration_target_path,
-        log,
-        database,
-    ) {
+    let uuid = match add_migration_result_to_db(migration_target_path, log, database) {
         Ok(uuid) => uuid,
         Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
@@ -155,16 +147,11 @@ fn file_arr_from_path(dir_path: String) -> Result<Vec<File>, anyhow::Error> {
     Ok(file_arr)
 }
 
-async fn return_config_json(uuid: OriginalUri, State(shared_state): State<AppState>) -> Response {
+async fn return_config_json(Path(uuid): Path<String>, State(shared_state): State<AppState>) -> Response {
     let database = shared_state.database.lock().await;
 
-    let uuid_stripped_of_prefix = match uuid.to_string().strip_prefix("/json/") {
-        Some(uri) => uri.to_owned(),
-        None => uuid.to_string(),
-    };
-
     let path_log: (String, String) =
-        read_from_db(uuid_stripped_of_prefix.clone(), &database).unwrap();
+        read_from_db(uuid.clone(), &database).unwrap();
 
     let json_string = generate_json(
         &path_log.1,
@@ -177,7 +164,7 @@ async fn return_config_json(uuid: OriginalUri, State(shared_state): State<AppSta
         },
     );
 
-    match delete_file(&uuid_stripped_of_prefix, &database) {
+    match delete_file(&uuid, &database) {
         Ok(()) => (),
         Err(e) => eprint!("Error when removing directory {}: {}", path_log.0, e),
     };
@@ -191,7 +178,6 @@ fn return_as_tar(path: String) -> anyhow::Result<tempfile::NamedTempFile> {
     let output_tmpfile: tempfile::NamedTempFile = tempfile::Builder::new()
         .prefix("nm-migrated.")
         .suffix(".tar")
-        .keep(true)
         .tempfile()?;
 
     let output_path_str: &str = match output_tmpfile.path().to_str() {
@@ -220,15 +206,13 @@ fn return_as_tar(path: String) -> anyhow::Result<tempfile::NamedTempFile> {
     Ok(output_tmpfile)
 }
 
-async fn return_config_file(uuid: OriginalUri, State(shared_state): State<AppState>) -> Response {
+async fn return_config_file(
+    Path(uuid): Path<String>,
+    State(shared_state): State<AppState>,
+) -> Response {
     let database = shared_state.database.lock().await;
 
-    let uuid_stripped_of_prefix = match uuid.to_string().strip_prefix("/") {
-        Some(uri) => uri.to_owned(),
-        None => uuid.to_string(),
-    };
-
-    let path_log: (String, String) = match read_from_db(uuid_stripped_of_prefix.clone(), &database)
+    let path_log: (String, String) = match read_from_db(uuid.clone(), &database)
     {
         Ok(path_log) => path_log,
         Err(e) => {
@@ -256,11 +240,7 @@ async fn return_config_file(uuid: OriginalUri, State(shared_state): State<AppSta
         }
     };
 
-    match tar_tempfile.close() {
-        Ok(()) => (),
-        Err(e) => eprint!("failed to delete tempfile: {e}"),
-    };
-    match delete_file(&uuid_stripped_of_prefix, &database) {
+    match delete_file(&uuid, &database) {
         Ok(()) => (),
         Err(e) => eprint!("Error when removing directory {}: {}", path_log.0, e),
     };
