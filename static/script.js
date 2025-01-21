@@ -43,12 +43,21 @@ function pageSetup() {
     });
 
     document.getElementById('submit-button').addEventListener('click', function(event) {
+        if(!fileNamesAreValid()){
+            return;
+        }
+
+        if(!alertIfFileContainsPassword()){
+            return;
+        }
+
         let files = getFilesContent();
 
         if (files.length <= 0) {
             showUserInfo("Please add a file first");
             return;
         }
+      
         let formData = new FormData();
         files.forEach(element => {
             formData.append('files[]', element);
@@ -317,4 +326,46 @@ function downloadURL(url, name) {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(link);
+}
+
+function fileNamesAreValid(){
+    let invalidNames = []
+
+    for (let child of getFiles(document.getElementById('file-container'))) {
+        let filename = child.querySelector('#file-name').value;
+        if(!checkFilenameValidity(filename)){
+            invalidNames.push(filename);        
+        }
+    }
+    if(invalidNames.length > 0){
+        alert("Invalid file names:\n" + invalidNames.join('\n') + "\nvalid name example: ifcfg-interfacename or something.xml")
+        return false;
+    }
+    else{
+        return true;
+    }
+    function checkFilenameValidity(filename) {
+        let regex1 = /ifcfg-.+/i;
+        let regex2 = /.+\.xml/i;
+    
+        return regex1.test(filename) || regex2.test(filename);
+    }
+}
+
+function alertIfFileContainsPassword() {
+    passwords = []
+    let regex = /<passphrase>.+?<\/passphrase>|<password>.+?<\/password>|<client-key-passwd>.+?<\/client-key-passwd>|<key>.+?<\/key>|<modem-pin>.+?<\/modem-pin>|WIRELESS_WPA_PASSWORD=.+?$|WIRELESS_WPA_PSK=.+?$|WIRELESS_KEY_[0-3]=.+?$|WIRELESS_CLIENT_KEY_PASSWORD=.+?$|PASSWORD=.+?$/gms;
+
+    for (let child of getFiles(document.getElementById('file-container'))) {
+        let fileText = child.querySelector('#file-content-textarea').value;
+        if (regex.test(fileText)){
+            passwords.push(...fileText.match(regex));
+        }
+    }
+
+    if(passwords.length > 0){
+        let pswd_str = passwords.join('\n');
+        return confirm("You have password(s) in your file. Consider removing it: " + pswd_str + "\n\nThis will be sent to the server, do you want to continue anyway?");
+    }
+    return true;
 }
