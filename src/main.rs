@@ -72,7 +72,7 @@ fn migrate(redirect_path: String, files: Vec<File>, database: &Connection) -> Re
 
             if !output.status.success() {
                 return Response::builder()
-                    .status(500)
+                    .status(422)
                     .header("Content-Type", "text/plain")
                     .body(format!("The files couldn't be migrated:\n{}", log).into())
                     .unwrap();
