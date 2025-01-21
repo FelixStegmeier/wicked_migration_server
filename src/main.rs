@@ -45,8 +45,8 @@ struct File {
     file_type: FileType,
 }
 
-///removes file from database and file system
-fn delete_file(uuid: &str, database: &Connection) -> anyhow::Result<()> {
+///removes path from database and file system
+fn delete_db_entry(uuid: &str, database: &Connection) -> anyhow::Result<()> {
     std::fs::remove_dir_all(read_from_db((uuid).to_string(), database)?.0)?;
 
     let mut stmt: rusqlite::Statement<'_> =
@@ -161,7 +161,7 @@ async fn return_config_json(Path(uuid): Path<String>, State(shared_state): State
         },
     );
 
-    match delete_file(&uuid, &database) {
+    match delete_db_entry(&uuid, &database) {
         Ok(()) => (),
         Err(e) => eprint!("Error when removing directory {}: {}", path_log.0, e),
     };
@@ -237,7 +237,7 @@ async fn return_config_file(
         }
     };
 
-    match delete_file(&uuid, &database) {
+    match delete_db_entry(&uuid, &database) {
         Ok(()) => (),
         Err(e) => eprint!("Error when removing directory {}: {}", path_log.0, e),
     };
@@ -418,7 +418,7 @@ async fn rm_file_after_expiration(database: &Arc<Mutex<Connection>>) -> Result<(
         let row = row?;
         let uuid: String = row?;
 
-        delete_file(&uuid, &db)?;
+        delete_db_entry(&uuid, &db)?;
     }
     Ok(())
 }
