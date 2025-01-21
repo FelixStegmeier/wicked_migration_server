@@ -121,10 +121,7 @@ fn generate_json(log: &str, files: Vec<File>) -> String {
 fn file_arr_from_path(dir_path: String) -> Result<Vec<File>, anyhow::Error> {
     let mut file_arr: Vec<File> = vec![];
 
-    let dir = match fs::read_dir(dir_path.clone() + "/NM-migrated/system-connections") {
-        Ok(dir) => dir,
-        Err(_e) => fs::read_dir(dir_path + "/NM-migrated")?,
-    };
+    let dir = fs::read_dir(dir_path.clone() + "/NM-migrated/system-connections")?;
 
     for dir_entry in dir {
         let path = dir_entry?.path();
@@ -391,7 +388,7 @@ fn migrate_files(
         )
     } else {
         format!("run --rm -v {}:/migration-tmpdir:z {} bash -c
-            \"migrate-wicked migrate -c /migration-tmpdir/ && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated\"",
+            \"migrate-wicked migrate -c /migration-tmpdir/ && mkdir /migration-tmpdir/NM-migrated && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated\"",
             migration_target_path,
                 REGISTRY_URL,
         )
