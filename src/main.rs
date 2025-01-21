@@ -56,13 +56,13 @@ fn delete_db_entry(uuid: &str, database: &Connection) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn migrate(redirect_path: String, files: Vec<File>, database: &Connection) -> Response {
+fn migrate(files: Vec<File>, database: &Connection) -> Result<String, Response> {
     let migration_target_path = "/tmp/".to_owned() + &uuid::Uuid::new_v4().to_string();
     match fs::DirBuilder::new().create(&migration_target_path) {
         Ok(()) => (),
         Err(e) => {
             eprint!("Could not create directory: {}", e);
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            return Err(StatusCode::INTERNAL_SERVER_ERROR.into_response());
         }
     };
 
@@ -71,25 +71,25 @@ fn migrate(redirect_path: String, files: Vec<File>, database: &Connection) -> Re
             let log = String::from_utf8_lossy(&output.stderr).to_string();
 
             if !output.status.success() {
-                return Response::builder()
+                return Err(Response::builder()
                     .status(422)
                     .header("Content-Type", "text/plain")
                     .body(format!("The files couldn't be migrated:\n{}", log).into())
-                    .unwrap();
+                    .unwrap());
             }
             log
         }
         Err(e) => {
             eprint!("Error when migrating files: {}", e);
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            return Err(StatusCode::INTERNAL_SERVER_ERROR.into_response());
         }
     };
 
     let uuid = match add_migration_result_to_db(migration_target_path, log, database) {
         Ok(uuid) => uuid,
-        Err(_e) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        Err(_e) => return Err(StatusCode::INTERNAL_SERVER_ERROR.into_response()),
     };
-    axum::response::Redirect::to(format!("{}/{}", redirect_path, uuid).as_str()).into_response()
+    Ok(uuid)
 }
 
 fn read_from_db(uuid: String, database: &Connection) -> anyhow::Result<(String, String)> {
@@ -144,11 +144,13 @@ fn file_arr_from_path(dir_path: String) -> Result<Vec<File>, anyhow::Error> {
     Ok(file_arr)
 }
 
-async fn return_config_json(Path(uuid): Path<String>, State(shared_state): State<AppState>) -> Response {
+async fn return_config_json(
+    Path(uuid): Path<String>,
+    State(shared_state): State<AppState>,
+) -> Response {
     let database = shared_state.database.lock().await;
 
-    let path_log: (String, String) =
-        read_from_db(uuid.clone(), &database).unwrap();
+    let path_log: (String, String) = read_from_db(uuid.clone(), &database).unwrap();
 
     let json_string = generate_json(
         &path_log.1,
@@ -209,8 +211,7 @@ async fn return_config_file(
 ) -> Response {
     let database = shared_state.database.lock().await;
 
-    let path_log: (String, String) = match read_from_db(uuid.clone(), &database)
-    {
+    let path_log: (String, String) = match read_from_db(uuid.clone(), &database) {
         Ok(path_log) => path_log,
         Err(e) => {
             eprint!("Error when attempting to retrieve entry from DB: {e}");
@@ -344,11 +345,19 @@ async fn redirect_post_multipart_form(
             .unwrap();
     }
 
-    if uri.to_string() == "/json" {
-        migrate("/json".to_string(), data_array, &database)
+    let redirect_path = if uri.to_string() == "/json" {
+        match migrate(data_array, &database) {
+            Ok(uuid) => "json/".to_owned() + &uuid,
+            Err(response) => return response,
+        }
     } else {
-        migrate("".to_string(), data_array, &database)
-    }
+        match migrate(data_array, &database) {
+            Ok(uuid) => uuid,
+            Err(response) => return response,
+        }
+    };
+
+    axum::response::Redirect::to(&redirect_path).into_response()
 }
 
 async fn redirect(State(shared_state): State<AppState>, data_string: String) -> Response {
@@ -358,7 +367,13 @@ async fn redirect(State(shared_state): State<AppState>, data_string: String) -> 
         file_name: "wicked.xml".to_string(),
         file_type: FileType::Xml,
     }];
-    migrate("".to_string(), data_arr, &database)
+
+    let redirect_path = match migrate(data_arr, &database) {
+        Ok(uuid) => uuid,
+        Err(response) => return response,
+    };
+
+    axum::response::Redirect::to(&redirect_path).into_response()
 }
 
 fn create_and_write_to_file(
