@@ -103,6 +103,7 @@ fn migrate(files: Vec<File>, database: &Connection) -> Result<String, MigrateErr
     Ok(uuid)
 }
 
+/// Returns a tuple with (file_path, log) associated with a given UUID.
 fn read_from_db(uuid: String, database: &Connection) -> anyhow::Result<(String, String)> {
     let mut select_stmt = database.prepare(
         format!(
