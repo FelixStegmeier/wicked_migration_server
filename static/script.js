@@ -170,15 +170,15 @@ async function downloadFiles() {
         return
     }
     const tar_writer = new TarWriter();
-    tar_writer.addFolder('wicked');
+    tar_writer.addFolder('system-connections');
     for (let child of getFiles(document.getElementById('file-result-container'))) {
-        tar_writer.addFile('wicked/' + child.querySelector('#file-name').value, child.querySelector('#file-content-textarea').value);
+        tar_writer.addFile('system-connections/' + child.querySelector('#file-name').value, child.querySelector('#file-content-textarea').value);
     }
     const output = await tar_writer.write();
     const fileURL = URL.createObjectURL(output);
     const downloadLink = document.createElement('a');
     downloadLink.href = fileURL;
-    downloadLink.download = 'wicked.tar';
+    downloadLink.download = 'system-connections.tar';
     document.body.appendChild(downloadLink);
     downloadLink.click();
     URL.revokeObjectURL(fileURL);
