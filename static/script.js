@@ -94,7 +94,7 @@ function pageSetup() {
 
         showUserInfo("");
 
-        document.getElementById('download-wicked-files-button').addEventListener('click', function(event) {
+        document.getElementById('download-nm-files-button').addEventListener('click', function(event) {
             downloadFiles();
         });
     });
@@ -111,14 +111,14 @@ function showOrHideConfiguredFiles(){
 let downloadButtonDisabled = true;
 function showConfigurationResult(){
     downloadButtonDisabled = false;
-    document.getElementById('download-wicked-files-button').style.backgroundColor = "#4CAF50";
+    document.getElementById('download-nm-files-button').style.backgroundColor = "#4CAF50";
     document.getElementById('input-container').style.width = "50%";
     document.getElementById('migration-result-container').style.width = "50%";
     document.getElementById('migration-result-container').style.visibility= "visible";
 }
 function hideConfigurationResult(){
     downloadButtonDisabled = true;
-    document.getElementById('download-wicked-files-button').style.backgroundColor = "#8b958c";
+    document.getElementById('download-nm-files-button').style.backgroundColor = "#8b958c";
     document.getElementById('input-container').style.width = "100%";
     document.getElementById('migration-result-container').style.width = "0%";
     document.getElementById('migration-result-container').style.visibility= "hidden";

@@ -159,7 +159,7 @@ button {
     min-height: 50px;
 }
 
-#download-wicked-files-button {
+#download-nm-files-button {
     background-color: #8b958c;
     padding: 10px 20px;
     transition: background-color 0.3s;
