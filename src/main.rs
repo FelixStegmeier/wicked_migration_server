@@ -4,7 +4,6 @@ use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::post;
 use axum::{routing::get, Router};
 use clap::Parser;
-use tempfile::Builder;
 use core::{panic, str};
 use rusqlite::Connection;
 use std::fs::{self, create_dir_all};
@@ -13,6 +12,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
+use tempfile::Builder;
 use thiserror::Error;
 use tokio::sync::Mutex;
 use tower_http::services::ServeFile;
@@ -89,7 +89,7 @@ fn delete_db_entry(uuid: &str, database: &Connection) -> anyhow::Result<()> {
 }
 
 fn migrate(files: Vec<File>, database: &Connection) -> Result<String, MigrateError> {
-    let migration_target_path = match Builder::new().keep(true).tempdir(){
+    let migration_target_path = match Builder::new().keep(true).tempdir() {
         Ok(tempdir) => tempdir.path().to_string_lossy().into_owned(),
         Err(e) => return Err(MigrateError::ServerError(e.to_string())),
     };
@@ -405,7 +405,7 @@ fn migrate_files(
     let arguments_str = if files[0].file_type == FileType::Ifcfg {
         format!(
             "run -e \"MIGRATE_WICKED_CONTINUE_MIGRATION=true\" --rm -v {}:/etc/sysconfig/network:z {}",
-            migration_target_path.clone(),
+            migration_target_path,
                 REGISTRY_URL
         )
     } else {
