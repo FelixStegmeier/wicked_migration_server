@@ -175,10 +175,9 @@ async fn return_config_json(
         },
     );
 
-    match delete_db_entry(&uuid, &database) {
-        Ok(()) => (),
-        Err(e) => eprintln!("Error when removing database entry {}: {}", uuid, e),
-    };
+    if let Err(e) = delete_db_entry(&uuid, &database) {
+        eprintln!("Error when removing database entry {}: {}", uuid, e);
+    }
 
     drop(database);
 
@@ -250,10 +249,9 @@ async fn return_config_file(
         }
     };
 
-    match delete_db_entry(&uuid, &database) {
-        Ok(()) => (),
-        Err(e) => eprintln!("Error when removing directory {}: {}", path_log.0, e),
-    };
+    if let Err(e) = delete_db_entry(&uuid, &database) {
+        eprintln!("Error when removing database entry {}: {}", uuid, e);
+    }
 
     drop(database);
 
