@@ -3,9 +3,9 @@
     padding: 0;
     box-sizing: border-box;
     font-family: Arial, sans-serif;
-    }
-    
-    #drop-area {
+}
+
+#drop-area {
     border: 2px dashed #ccc;
     border-radius: 20px;
     font-family: sans-serif;
@@ -14,260 +14,261 @@
     margin-top: 0px;
     padding: 20px;
     min-height: 200px;
-    }
-    
-    #drop-area.highlight {
+}
+
+#drop-area.highlight {
     border-color: lightblue;
-    }
-    
-    body {
-        background-color: #f5f5f5;
-        min-height: 100vh;
-        margin: 0;
-        display: flex;
-        flex-direction: column;
-    }
-    
-    main {
-        flex: 1;
-    }
-    
-    #content {
+}
+
+body {
+    background-color: #f5f5f5;
+    min-height: 100vh;
+    margin: 0;
     display: flex;
     flex-direction: column;
-    
+}
+
+main {
+    flex: 1;
+}
+
+#content {
+    display: flex;
+    flex-direction: column;
+
     margin-left: 20px;
     margin-right: 20px;
     margin-bottom: auto;
-    }
-    
-    #migration-files{
+}
+
+#migration-files{
     display: flex;
     flex-direction: row;
-    
+
     margin-left: 20px;
     margin-right: 20px;
     margin-bottom: auto;
-    }
-    
-    header {
-        background-color: #4bb679;
-        padding-top: 20px;
-        padding-bottom: 20px;
-    }
-    
-    footer {
-        background-color: #173f4f;
-        color: white;
-        text-align: center;
-        margin-top: 30px;
-    }
-    
-    #footer-content {
+}
+
+header {
+    background-color: #4bb679;
+    padding-top: 20px;
+    padding-bottom: 20px;
+}
+
+footer {
+    background-color: #173f4f;
+    color: white;
+    text-align: center;
+    margin-top: 30px;
+}
+
+#footer-content {
     margin-top: 20px;
     margin-bottom: 10px;
     margin-left: 20px;
     margin-right: 20px;
-    }
-    
-    .footer-icon-link {
-        font-size: 2em;
-    }
-    
-    #footer-links-section {
+}
+
+.footer-icon-link {
+    font-size: 2em;
+}
+
+#footer-links-section {
     display: flex;
     justify-content: space-between;
-    }
-    
-    #docs-links {
+}
+
+#docs-links {
     margin-top: auto;
     margin-bottom: auto;
-    }
-    
-    #docs-links a {
+}
+
+#docs-links a {
     text-decoration: none;
-    }
-    
-    #docs-links a:hover {
+}
+
+#docs-links a:hover {
     text-decoration: underline;
-    }
-    
-    a, a:visited{
-        color: white;
-    }
-    
-    ul {
-        list-style-type: none;
-        padding: 0;
-        margin: 0;
-        text-align: left;
-    }
-    
-    h1 {
-        text-align: center;
-        color: white;
-    }
-    
-    h3 {
-        font-size: 24px;
-        color: #333;
-        margin-bottom: 20px;
-    }
-    #migration-result-container{
+}
+
+a, a:visited{
+    color: white;
+}
+
+ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    text-align: left;
+}
+
+h1 {
+    text-align: center;
+    color: white;
+}
+
+h3 {
+    font-size: 24px;
+    color: #333;
+    margin-bottom: 20px;
+}
+
+#migration-result-container{
     margin-top: 20px;
     margin-left: 20px;
     width: 0%;
     visibility: hidden;
-    }
-    #input-container {
+}
+
+#input-container {
     margin-top: 20px;
     width: 100%;
-    }
-    
-    pre {
-        background-color: #f0f0f0;
-        border: 1px solid #ddd;
-        border-radius: 5px;
-        padding: 15px;
-        overflow-y: auto;
-        text-align: left;
-        font-size: 14px;
-        color: #555;
-        flex: 1;
-        margin-right: 10px;
-        min-height: 50px;
-    }
-    
-    pre.highlight-error {
-        border: 1px solid crimson;
-    }
-    
-    button {
-        color: white;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        font-size: 16px;
-    }
-    
-    #submit-button {
+}
+
+pre {
+    background-color: #f0f0f0;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 15px;
+    overflow-y: auto;
+    text-align: left;
+    font-size: 14px;
+    color: #555;
+    flex: 1;
+    margin-right: 10px;
+    min-height: 50px;
+}
+
+pre.highlight-error {
+    border: 1px solid crimson;
+}
+
+button {
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+#submit-button {
     background-color: #4CAF50;
     padding: 10px 20px;
     transition: background-color 0.3s;
     min-height: 50px;
-    }
-    
-    #download-wicked-files-button {
+}
+
+#download-wicked-files-button {
     background-color: #8b958c;
     padding: 10px 20px;
     transition: background-color 0.3s;
     min-height: 50px;
-    }
-    
-    #submit-button:hover {
+}
+
+#submit-button:hover {
     background-color: #45a049;
-    }
-    
-    .remove-file-button {
-        background-color: crimson;
-        color: white;
-        padding-bottom: 1px;
-        padding-top: 1px;
-        padding-left: 7px;
-        padding-right: 7px;
-        margin-left: 5px;
-    }
-    .remove-file-button:hover{
-        background-color: rgba(199, 18, 54, 0.822)
-    }
-    
-    .file-header {
-        margin-bottom: 5px;
-        display: flex;
-    }
-    
-    .file-header input[type='text'] {
-        background-color: #FFFFFF;
-        border: 1px solid #D6D9DC;
-        border-radius: 3px;
-        width: 100%;
-        padding: 7px;
-        font-size: 14px;
-    }
-    
-    .file-content textarea {
-        font-family: monospace;
-        font-size: 14px;
-    
-        border: 1px solid #D6D9DC;
-        border-radius: 3px;
-    
-        min-height: 200px;
-        padding: 7px;
-        resize: none;
-        width: 100%;
-    }
-    
-    input[type="file"] {
-        display: none;
-    }
-    
-    .custom-button {
-        background-color: lightgrey;
-        border: 1px solid #D6D9DC;
-        border-radius: 3px;
-        display: inline-block;
-        padding: 6px 12px;
-        cursor: pointer;
-        margin-bottom: 10px;
-    }
-    
-    .custom-button:hover {
-        background-color: silver;
-    }
-    
-    #reset-files-button {
+}
+
+.remove-file-button {
+    background-color: crimson;
+    color: white;
+    padding-bottom: 1px;
+    padding-top: 1px;
+    padding-left: 7px;
+    padding-right: 7px;
+    margin-left: 5px;
+}
+.remove-file-button:hover{
+    background-color: rgba(199, 18, 54, 0.822)
+}
+
+.file-header {
+    margin-bottom: 5px;
+    display: flex;
+}
+
+.file-header input[type='text'] {
+    background-color: #FFFFFF;
+    border: 1px solid #D6D9DC;
+    border-radius: 3px;
+    width: 100%;
+    padding: 7px;
+    font-size: 14px;
+}
+
+.file-content textarea {
+    font-family: monospace;
+    font-size: 14px;
+
+    border: 1px solid #D6D9DC;
+    border-radius: 3px;
+
+    min-height: 200px;
+    padding: 7px;
+    resize: none;
+    width: 100%;
+}
+
+input[type="file"] {
     display: none;
-    }
-    
-    hr.solid-divider {
-        margin-top: 8px;
-        margin-bottom: 8px;
-        border: 2px solid #bbb;
-        border-radius: 3px;
-    }
-    
-    #files-header {
+}
+
+.custom-button {
+    background-color: lightgrey;
+    border: 1px solid #D6D9DC;
+    border-radius: 3px;
+    display: inline-block;
+    padding: 6px 12px;
+    cursor: pointer;
+    margin-bottom: 10px;
+}
+
+.custom-button:hover {
+    background-color: silver;
+}
+
+#reset-files-button {
+display: none;
+}
+
+hr.solid-divider {
+    margin-top: 8px;
+    margin-bottom: 8px;
+    border: 2px solid #bbb;
+    border-radius: 3px;
+}
+
+#files-header {
     display: flex;
     justify-content: space-between;
-    }
-    
-    #migration-container {
+}
+
+#migration-container {
     display: flex;
-    }
-    
-    .placeholder {
-        opacity: 50%;
-    }
-    
-    #file-placeholder-icon {
+}
+
+.placeholder {
+    opacity: 50%;
+}
+
+#file-placeholder-icon {
     font-size: 3em;
     margin-bottom: 4px;
     opacity: 20%;
-    }
-    
-    .center-container {
-        height: 200px;
-        position: relative;
-    }
-    
-    .center-element {
-        margin: 0;
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        -ms-transform: translate(-50%, -50%);
-        transform: translate(-50%, -50%);
-        text-align: center;
-    }
-    
+}
+
+.center-container {
+    height: 200px;
+    position: relative;
+}
+
+.center-element {
+    margin: 0;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    -ms-transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%);
+    text-align: center;
+}
