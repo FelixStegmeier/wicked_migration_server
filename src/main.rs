@@ -4,7 +4,6 @@ use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::post;
 use axum::{routing::get, Router};
 use clap::Parser;
-use thiserror::Error;
 use core::{panic, str};
 use rusqlite::Connection;
 use std::fs::{self, create_dir_all};
@@ -13,6 +12,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
+use thiserror::Error;
 use tokio::sync::Mutex;
 use tower_http::services::ServeFile;
 
@@ -391,7 +391,6 @@ fn create_and_write_to_file(
 ) -> Result<(), anyhow::Error> {
     for file in files {
         let input_file_path = migration_target_path.clone() + "/" + &file.file_name;
-        fs::File::create_new(&input_file_path)?;
         std::fs::write(&input_file_path, file.file_content.as_bytes())?;
     }
     Ok(())
