@@ -42,6 +42,11 @@ function pageSetup() {
         showUserInfo("");
     });
 
+    document.getElementById('reset-configured-files-button').addEventListener('click', function(event) {
+        clearFiles('file-result-container', 'file-placeholder-result');
+        showUserInfo("");
+    });
+
     document.getElementById('submit-button').addEventListener('click', function(event) {
         let files = getFilesContent();
 

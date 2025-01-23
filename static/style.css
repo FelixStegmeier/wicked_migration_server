@@ -232,6 +232,10 @@ input[type="file"] {
 display: none;
 }
 
+#reset-configured-files-button {
+    display: none;
+}
+
 hr.solid-divider {
     margin-top: 8px;
     margin-bottom: 8px;
@@ -240,6 +244,11 @@ hr.solid-divider {
 }
 
 #files-header {
+    display: flex;
+    justify-content: space-between;
+}
+
+#configured-files-header {
     display: flex;
     justify-content: space-between;
 }
