@@ -157,6 +157,8 @@ button {
     padding: 10px 20px;
     transition: background-color 0.3s;
     min-height: 50px;
+    width: 100%;
+    margin-bottom: 10px;
 }
 
 #download-nm-files-button {
@@ -229,11 +231,15 @@ input[type="file"] {
 }
 
 #reset-files-button {
-display: none;
+    display: none;
 }
 
 #reset-configured-files-button {
     display: none;
+}
+
+#migrate-download-buttons{
+    flex-direction: column;
 }
 
 hr.solid-divider {
