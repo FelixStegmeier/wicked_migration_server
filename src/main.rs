@@ -238,7 +238,7 @@ async fn return_config_file(
         }
     };
 
-    let file_contents = match get_file_contents(tar_tempfile.path().to_owned()) {
+    let file_contents = match get_file_contents(tar_tempfile.path()) {
         Ok(file_contents) => file_contents,
         Err(e) => {
             eprintln!(
@@ -258,9 +258,9 @@ async fn return_config_file(
     file_contents.into_response()
 }
 
-fn get_file_contents(path: std::path::PathBuf) -> Result<String, anyhow::Error> {
+fn get_file_contents(path: impl AsRef<std::path::Path>) -> Result<String, anyhow::Error> {
     let contents = std::fs::read_to_string(path)?;
-    Ok(contents.to_string())
+    Ok(contents)
 }
 
 fn add_migration_result_to_db(
