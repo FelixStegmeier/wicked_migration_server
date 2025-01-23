@@ -168,7 +168,7 @@ async fn return_config_json(
         match file_arr_from_path(path_log.0.clone()) {
             Ok(file_arr) => file_arr,
             Err(e) => {
-                eprint!("Could not retrieve files from path {}: {}", path_log.0, e);
+                eprintln!("Could not retrieve files from path {}: {}", path_log.0, e);
                 return StatusCode::INTERNAL_SERVER_ERROR.into_response();
             }
         },
@@ -176,7 +176,7 @@ async fn return_config_json(
 
     match delete_db_entry(&uuid, &database) {
         Ok(()) => (),
-        Err(e) => eprint!("Error when removing database entry {}: {}", uuid, e),
+        Err(e) => eprintln!("Error when removing database entry {}: {}", uuid, e),
     };
 
     drop(database);
@@ -225,7 +225,7 @@ async fn return_config_file(
     let path_log: (String, String) = match read_from_db(uuid.clone(), &database) {
         Ok(path_log) => path_log,
         Err(e) => {
-            eprint!("Error when attempting to retrieve entry from DB: {e}");
+            eprintln!("Error when attempting to retrieve entry from DB: {e}");
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     };
@@ -233,7 +233,7 @@ async fn return_config_file(
     let tar_tempfile = match return_as_tar(path_log.0.clone() + "/NM-migrated") {
         Ok(tar_tempfile) => tar_tempfile,
         Err(e) => {
-            eprint!("{e}");
+            eprintln!("{e}");
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     };
@@ -251,7 +251,7 @@ async fn return_config_file(
 
     match delete_db_entry(&uuid, &database) {
         Ok(()) => (),
-        Err(e) => eprint!("Error when removing directory {}: {}", path_log.0, e),
+        Err(e) => eprintln!("Error when removing directory {}: {}", path_log.0, e),
     };
 
     drop(database);
@@ -336,7 +336,7 @@ async fn redirect_post_multipart_form(
     let data_array = match read_multipart_post_data_to_file_arr(multipart).await {
         Ok(ok) => ok,
         Err(e) => {
-            eprint!("An error occurred when trying to read incoming data: {e}");
+            eprintln!("An error occurred when trying to read incoming data: {e}");
             return Response::builder()
                 .status(400)
                 .header("Content-Type", "text/plain")
