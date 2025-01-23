@@ -176,7 +176,7 @@ async fn return_config_json(
 
     match delete_db_entry(&uuid, &database) {
         Ok(()) => (),
-        Err(e) => eprint!("Error when removing directory {}: {}", path_log.0, e),
+        Err(e) => eprint!("Error when removing database entry {}: {}", uuid, e),
     };
 
     drop(database);
