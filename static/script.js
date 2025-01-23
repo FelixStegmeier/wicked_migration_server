@@ -45,6 +45,7 @@ function pageSetup() {
     document.getElementById('reset-configured-files-button').addEventListener('click', function(event) {
         clearFiles('file-result-container', 'file-placeholder-result');
         showUserInfo("");
+        showOrHideConfiguredFiles();
     });
 
     document.getElementById('submit-button').addEventListener('click', function(event) {
