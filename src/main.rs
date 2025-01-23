@@ -4,6 +4,7 @@ use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::post;
 use axum::{routing::get, Router};
 use clap::Parser;
+use tempfile::Builder;
 use core::{panic, str};
 use rusqlite::Connection;
 use std::fs::{self, create_dir_all};
@@ -88,10 +89,10 @@ fn delete_db_entry(uuid: &str, database: &Connection) -> anyhow::Result<()> {
 }
 
 fn migrate(files: Vec<File>, database: &Connection) -> Result<String, MigrateError> {
-    let migration_target_path = "/tmp/".to_owned() + &uuid::Uuid::new_v4().to_string();
-    if let Err(e) = fs::DirBuilder::new().create(&migration_target_path) {
-        return Err(MigrateError::ServerError(e.to_string()));
-    }
+    let migration_target_path = match Builder::new().keep(true).tempdir(){
+        Ok(tempdir) => tempdir.path().to_string_lossy().into_owned(),
+        Err(e) => return Err(MigrateError::ServerError(e.to_string())),
+    };
 
     let output = migrate_files(&files, migration_target_path.clone())?;
     let log = String::from_utf8_lossy(&output.stderr).to_string();
