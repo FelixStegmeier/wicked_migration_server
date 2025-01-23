@@ -43,6 +43,8 @@ function pageSetup() {
     });
 
     document.getElementById('submit-button').addEventListener('click', function(event) {
+        let files = getFilesContent();
+
         if(!fileNamesAreValid()){
             return;
         }
@@ -50,8 +52,6 @@ function pageSetup() {
         if(!alertIfFileContainsPassword()){
             return;
         }
-
-        let files = getFilesContent();
 
         if (files.length <= 0) {
             showUserInfo("Please add a file first");
@@ -353,7 +353,7 @@ function fileNamesAreValid(){
 }
 
 function alertIfFileContainsPassword() {
-    passwords = []
+    let passwords = []
     let regex = /<passphrase>.+?<\/passphrase>|<password>.+?<\/password>|<client-key-passwd>.+?<\/client-key-passwd>|<key>.+?<\/key>|<modem-pin>.+?<\/modem-pin>|WIRELESS_WPA_PASSWORD=.+?$|WIRELESS_WPA_PSK=.+?$|WIRELESS_KEY_[0-3]=.+?$|WIRELESS_CLIENT_KEY_PASSWORD=.+?$|PASSWORD=.+?$/gms;
 
     for (let child of getFiles(document.getElementById('file-container'))) {
