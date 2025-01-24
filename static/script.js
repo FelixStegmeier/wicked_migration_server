@@ -114,16 +114,17 @@ function showOrHideConfiguredFiles(){
         showConfigurationResult()
     }
 }
-let downloadButtonDisabled = true;
+
 function showConfigurationResult(){
-    downloadButtonDisabled = false;
+    document.getElementById('download-nm-files-button').disabled = false;
     document.getElementById('download-nm-files-button').style.backgroundColor = "#4CAF50";
     document.getElementById('input-container').style.width = "50%";
     document.getElementById('migration-result-container').style.width = "50%";
     document.getElementById('migration-result-container').style.visibility= "visible";
 }
+
 function hideConfigurationResult(){
-    downloadButtonDisabled = true;
+    document.getElementById('download-nm-files-button').disabled = true;
     document.getElementById('download-nm-files-button').style.backgroundColor = "#8b958c";
     document.getElementById('input-container').style.width = "100%";
     document.getElementById('migration-result-container').style.width = "0%";
@@ -172,9 +173,6 @@ function getFilesContent() {
 }
 
 async function downloadFiles() {
-    if (downloadButtonDisabled){
-        return
-    }
     const tar_writer = new TarWriter();
     tar_writer.addFolder('system-connections');
     for (let child of getFiles(document.getElementById('file-result-container'))) {
