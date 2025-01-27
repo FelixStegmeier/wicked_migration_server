@@ -118,17 +118,13 @@ function showOrHideConfiguredFiles(){
 function showConfigurationResult(){
     document.getElementById('download-nm-files-button').disabled = false;
     document.getElementById('download-nm-files-button').style.backgroundColor = "#4CAF50";
-    document.getElementById('input-container').style.width = "50%";
-    document.getElementById('migration-result-container').style.width = "50%";
-    document.getElementById('migration-result-container').style.visibility= "visible";
+    document.getElementById('migration-result-container').style.display= "block";
 }
 
 function hideConfigurationResult(){
     document.getElementById('download-nm-files-button').disabled = true;
     document.getElementById('download-nm-files-button').style.backgroundColor = "#8b958c";
-    document.getElementById('input-container').style.width = "100%";
-    document.getElementById('migration-result-container').style.width = "0%";
-    document.getElementById('migration-result-container').style.visibility= "hidden";
+    document.getElementById('migration-result-container').style.display = "none";
 }
 
 function configuratedContentIsEmpty() {

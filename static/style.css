@@ -117,8 +117,8 @@ h3 {
 #migration-result-container{
     margin-top: 20px;
     margin-left: 20px;
-    width: 0%;
-    visibility: hidden;
+    width: 100%;
+    display: none;
 }
 
 #input-container {
