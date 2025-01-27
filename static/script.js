@@ -273,6 +273,8 @@ function createAndAddConfiguredFiles(newFile) {
 
     let fileContainer = document.getElementById('file-result-container');
     fileContainer.appendChild(node);
+    
+    setFileDividers(document.getElementById('file-result-container'));
 }
 
 // Returns an array containing only all file elements of node
