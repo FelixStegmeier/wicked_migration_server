@@ -273,7 +273,7 @@ function createAndAddConfiguredFiles(newFile) {
 
     let fileContainer = document.getElementById('file-result-container');
     fileContainer.appendChild(node);
-    
+
     setFileDividers(document.getElementById('file-result-container'));
 }
 
@@ -299,7 +299,6 @@ function setFileDividers(node) {
 
 // If there are no files present a placeholder is shown, otherwise it gets hidden
 function showOrHideFilePlaceholder(target, placeholder) {
-    setFileDividers(document.getElementById(target));
     document.getElementById(placeholder).hidden = getFiles(document.getElementById(target)).length != 0;
 }
 
