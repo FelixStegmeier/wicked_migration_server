@@ -32,14 +32,14 @@ function pageSetup() {
         for (let i = 0; i < event.target.files.length; i++) {
             file_arr.push(event.target.files[i]);
         }
-        file_arr.forEach(addFile);
+        file_arr.forEach(createAndAddWickedFile);
         event.target.value = "";
         setFileDividers(document.getElementById('file-container'));
     });
 
     document.getElementById('reset-files-button').addEventListener('click', function(event) {
         clearFiles('file-container');
-        showOrHideFilePlaceholder(target, 'file-placeholder');
+        showOrHideFilePlaceholder();
         showUserInfo("");
     });
 
@@ -48,7 +48,7 @@ function pageSetup() {
         showUserInfo("");
         showOrHideConfiguredFiles();
     });
-    
+
     document.getElementById('download-nm-files-button').addEventListener('click', function(event) {
         downloadFiles();
     });
@@ -68,7 +68,7 @@ function pageSetup() {
             showUserInfo("Please add a file first");
             return;
         }
-      
+
         let formData = new FormData();
         files.forEach(element => {
             formData.append('files[]', element);
@@ -85,12 +85,10 @@ function pageSetup() {
                     let parsed_json = JSON.parse(json);
 
                     showUserInfo(parsed_json.log)
-                    parsed_json.files.forEach(file =>
-                    {
-                        createAndAddConfiguredFiles(file);
+                    parsed_json.files.forEach(file => {
+                        createAndAddNMFile(file);
                         setFileDividers(document.getElementById('file-result-container'));
-                    }
-                    )
+                    });
                     showOrHideConfiguredFiles();
                 })
                 .catch(error => {
@@ -215,62 +213,42 @@ function handleDrop(e) {
     setFileDividers(document.getElementById('file-container'));
 }
 
-//Adds the file to the dom if it isnt already
-function addFile(newFile) {
-    if (!newFileAlreadyExists(newFile)) {
-        createAndAdd(newFile);
-        showOrHideFilePlaceholder('file-container', 'file-placeholder');
+//Adds a wicked file to the dom if it doesn't exist already
+async function createAndAddWickedFile(file) {
+    if (newFileAlreadyExists(file)) {
+        return
     }
-}
-
-//Adds the recieved file to the dom
-function createAndAdd(newFile) {
-    const templateRef = document.getElementById("file-template");
-    let node = templateRef.content.cloneNode(true);
-
-    const fileTextArea = node.querySelector("#file-content-textarea");
-    fileTextArea.style.height = fileTextArea.scrollHeight + 'px';
-
-    node.querySelector('#remove-button').addEventListener('click', function(event) {
+    const node = createAndAddFile(file.name, await file.text(), 'file-container', function(event) {
         let element = event.target.closest("#file");
         element.parentNode.removeChild(element);
         setFileDividers(document.getElementById('file-container'));
-        showOrHideFilePlaceholder('file-container', 'file-placeholder');
+        showOrHideFilePlaceholder();
     });
-
-    node.querySelector("#file-name").value = newFile.name;
-    let reader = new FileReader()
-    reader.onload = function(e) {
-        fileTextArea.value = e.target.result;
-        setTimeout(() => {
-            fileTextArea.style.height = fileTextArea.scrollHeight + 'px';
-        }, 0);
-    }
-    reader.readAsText(newFile);
-
-    let fileContainer = document.getElementById('file-container');
-    fileContainer.appendChild(node);
+    showOrHideFilePlaceholder();
 }
 
-function createAndAddConfiguredFiles(newFile) {
-    const templateRef = document.getElementById("file-template");
-    let node = templateRef.content.cloneNode(true);
-
-    const fileTextArea = node.querySelector("#file-content-textarea");
-    fileTextArea.style.height = fileTextArea.scrollHeight + 'px';
-
-    node.querySelector('#remove-button').addEventListener('click', function(event) {
+// Adds a NM file to the dom
+function createAndAddNMFile(file) {
+    createAndAddFile(file.fileName, file.fileContent, 'file-result-container', function(event) {
         let element = event.target.closest("#file");
         element.parentNode.removeChild(element);
         setFileDividers(document.getElementById('file-result-container'));
         showOrHideConfiguredFiles();
     });
+}
 
-    node.querySelector("#file-name").value = newFile.fileName;
-    fileTextArea.value = newFile.fileContent;
-
-    let fileContainer = document.getElementById('file-result-container');
-    fileContainer.appendChild(node);
+function createAndAddFile(filename, fileContent, containerId, deleteFunction) {
+    const templateRef = document.getElementById("file-template");
+    const node = templateRef.content.cloneNode(true);
+    node.querySelector("#file-name").value = filename;
+    const fileTextArea = node.querySelector("#file-content-textarea");
+    fileTextArea.value = fileContent;
+    node.querySelector('#remove-button').addEventListener('click', deleteFunction);
+    const container = document.getElementById(containerId);
+    container.appendChild(node);
+    fileTextArea.style.height = fileTextArea.scrollHeight + 'px';
+    setFileDividers(document.getElementById(containerId));
+    return node
 }
 
 // Returns an array containing only all file elements of node
@@ -294,8 +272,8 @@ function setFileDividers(node) {
 }
 
 // If there are no files present a placeholder is shown, otherwise it gets hidden
-function showOrHideFilePlaceholder(target, placeholder) {
-    document.getElementById(placeholder).hidden = getFiles(document.getElementById(target)).length != 0;
+function showOrHideFilePlaceholder() {
+    document.getElementById('file-placeholder').hidden = getFiles(document.getElementById('file-container')).length != 0;
 }
 
 function newFileAlreadyExists(newFile) {
@@ -328,7 +306,7 @@ function fileNamesAreValid(){
     for (let child of getFiles(document.getElementById('file-container'))) {
         let filename = child.querySelector('#file-name').value;
         if(!checkFilenameValidity(filename)){
-            invalidNames.push(filename);        
+            invalidNames.push(filename);
         }
     }
     if(invalidNames.length > 0){
@@ -341,7 +319,7 @@ function fileNamesAreValid(){
     function checkFilenameValidity(filename) {
         let regex1 = /ifcfg-.+/i;
         let regex2 = /.+\.xml/i;
-    
+
         return regex1.test(filename) || regex2.test(filename);
     }
 }
