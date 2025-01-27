@@ -1,3 +1,5 @@
+import TarWriter from './tar_writer.js';
+
 pageSetup();
 
 function pageSetup() {
@@ -30,17 +32,29 @@ function pageSetup() {
         for (let i = 0; i < event.target.files.length; i++) {
             file_arr.push(event.target.files[i]);
         }
-        file_arr.forEach(addFile);
+        file_arr.forEach(createAndAddWickedFile);
         event.target.value = "";
         setFileDividers(document.getElementById('file-container'));
     });
 
     document.getElementById('reset-files-button').addEventListener('click', function(event) {
-        clearFiles();
+        clearFiles('file-container');
+        showOrHideFilePlaceholder();
         showUserInfo("");
     });
 
+    document.getElementById('reset-configured-files-button').addEventListener('click', function(event) {
+        clearFiles('file-result-container');
+        showUserInfo("");
+        showOrHideConfiguredFiles();
+    });
+
+    document.getElementById('download-nm-files-button').addEventListener('click', function(event) {
+        downloadFiles();
+    });
+
     document.getElementById('submit-button').addEventListener('click', function(event) {
+        let files = getFilesContent();
 
         if(!fileNamesAreValid()){
             return;
@@ -50,35 +64,72 @@ function pageSetup() {
             return;
         }
 
-        let filesContent = getFilesContent();
-        if (filesContent.length <= 0) {
+        if (files.length <= 0) {
             showUserInfo("Please add a file first");
             return;
         }
 
         let formData = new FormData();
-        filesContent.forEach(element => {
+        files.forEach(element => {
             formData.append('files[]', element);
         });
 
-        fetch('/multipart', {
-                method: 'POST',
-                body: formData,
-            })
-            .then(
-                response => {
-                    if (response.ok) {
-                        downloadURL(response.url, "nm-migrated.tar")
-                    } else {
-                        response.text().then(body => showUserInfo(body)).catch(e => showUserInfo(e));
-                    }
-                }
-            ).catch(error => {
-                showUserInfo("Network error occurred. Please try again.");
-            });
+        fetch('/json', {
+            method: 'POST',
+            body: formData,
+        }).then(response => {
+            if (response.ok) {
+                response.json().then(json => {
+                    clearFiles('file-result-container');
+
+                    let parsed_json = JSON.parse(json);
+
+                    showUserInfo(parsed_json.log)
+                    parsed_json.files.forEach(file => {
+                        createAndAddNMFile(file);
+                        setFileDividers(document.getElementById('file-result-container'));
+                    });
+                    showOrHideConfiguredFiles();
+                })
+                .catch(error => {
+                    showUserInfo("Network error occurred. Please try again.");
+                });;
+            }
+            else {
+                response.text().then(data => {
+                    showUserInfo("An error occured:\n"+ data);
+                });
+            }
+        })
 
         showUserInfo("");
     });
+}
+
+function showOrHideConfiguredFiles(){
+    if (configuratedContentIsEmpty()){
+        hideConfigurationResult()
+    }
+    else{
+        showConfigurationResult()
+    }
+}
+
+function showConfigurationResult(){
+    document.getElementById('download-nm-files-button').disabled = false;
+    document.getElementById('migration-result-container').style.display= "block";
+}
+
+function hideConfigurationResult(){
+    document.getElementById('download-nm-files-button').disabled = true;
+    document.getElementById('migration-result-container').style.display = "none";
+}
+
+function configuratedContentIsEmpty() {
+    if (getFiles(document.getElementById('file-result-container')).length > 0) {
+        return false;
+    }
+    return true;
 }
 
 function showUserInfo(text) {
@@ -115,10 +166,27 @@ function getFilesContent() {
     return files;
 }
 
+async function downloadFiles() {
+    const tar_writer = new TarWriter();
+    tar_writer.addFolder('system-connections');
+    for (let child of getFiles(document.getElementById('file-result-container'))) {
+        tar_writer.addFile('system-connections/' + child.querySelector('#file-name').value, child.querySelector('#file-content-textarea').value);
+    }
+    const output = await tar_writer.write();
+    const fileURL = URL.createObjectURL(output);
+    const downloadLink = document.createElement('a');
+    downloadLink.href = fileURL;
+    downloadLink.download = 'system-connections.tar';
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    URL.revokeObjectURL(fileURL);
+}
+
 function autoResize(textarea) {
     textarea.style.height = "auto";
     textarea.style.height = textarea.scrollHeight + 'px';
 }
+window.autoResize = autoResize;
 
 function preventDefaults(e) {
     e.preventDefault()
@@ -142,44 +210,46 @@ function handleDrop(e) {
     let dt = e.dataTransfer;
     let files = dt.files;
     let file_arr = Array.from(files);
-    file_arr.forEach(addFile);
+    file_arr.forEach(createAndAddWickedFile);
     setFileDividers(document.getElementById('file-container'));
 }
 
-function addFile(newFile) {
-    if (!newFileAlreadyExists(newFile)) {
-        createAndAdd(newFile);
+//Adds a wicked file to the dom if it doesn't exist already
+async function createAndAddWickedFile(file) {
+    if (newFileAlreadyExists(file)) {
+        return
     }
-}
-
-function createAndAdd(newFile) {
-    const templateRef = document.getElementById("file-template");
-    let node = templateRef.content.cloneNode(true);
-
-    const fileTextArea = node.querySelector("#file-content-textarea");
-    fileTextArea.style.height = fileTextArea.scrollHeight + 'px';
-
-    node.querySelector('#remove-button').addEventListener('click', function(event) {
+    const node = createAndAddFile(file.name, await file.text(), 'file-container', function(event) {
         let element = event.target.closest("#file");
         element.parentNode.removeChild(element);
         setFileDividers(document.getElementById('file-container'));
         showOrHideFilePlaceholder();
     });
-
-    node.querySelector("#file-name").value = newFile.name;
-    let reader = new FileReader()
-    reader.onload = function(e) {
-        fileTextArea.value = e.target.result;
-        setTimeout(() => {
-            fileTextArea.style.height = fileTextArea.scrollHeight + 'px';
-        }, 0);
-    }
-    reader.readAsText(newFile);
-
-    let fileContainer = document.getElementById('file-container');
-    fileContainer.appendChild(node);
-
     showOrHideFilePlaceholder();
+}
+
+// Adds a NM file to the dom
+function createAndAddNMFile(file) {
+    createAndAddFile(file.fileName, file.fileContent, 'file-result-container', function(event) {
+        let element = event.target.closest("#file");
+        element.parentNode.removeChild(element);
+        setFileDividers(document.getElementById('file-result-container'));
+        showOrHideConfiguredFiles();
+    });
+}
+
+function createAndAddFile(filename, fileContent, containerId, deleteFunction) {
+    const templateRef = document.getElementById("file-template");
+    const node = templateRef.content.cloneNode(true);
+    node.querySelector("#file-name").value = filename;
+    const fileTextArea = node.querySelector("#file-content-textarea");
+    fileTextArea.value = fileContent;
+    node.querySelector('#remove-button').addEventListener('click', deleteFunction);
+    const container = document.getElementById(containerId);
+    container.appendChild(node);
+    fileTextArea.style.height = fileTextArea.scrollHeight + 'px';
+    setFileDividers(document.getElementById(containerId));
+    return node
 }
 
 // Returns an array containing only all file elements of node
@@ -217,19 +287,18 @@ function newFileAlreadyExists(newFile) {
     return false;
 }
 
-function clearFiles() {
-    document.getElementById('file-container').innerHTML = "";
-    showOrHideFilePlaceholder();
+function clearFiles(target) {
+    document.getElementById(target).innerHTML = "";
 }
 
 function downloadURL(url, name) {
-    let link = document.createElement("a");
+    const link = document.createElement("a");
     link.download = name;
     link.href = url;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    delete link;
+    URL.revokeObjectURL(link);
 }
 
 function fileNamesAreValid(){
@@ -238,7 +307,7 @@ function fileNamesAreValid(){
     for (let child of getFiles(document.getElementById('file-container'))) {
         let filename = child.querySelector('#file-name').value;
         if(!checkFilenameValidity(filename)){
-            invalidNames.push(filename);        
+            invalidNames.push(filename);
         }
     }
     if(invalidNames.length > 0){
@@ -251,13 +320,13 @@ function fileNamesAreValid(){
     function checkFilenameValidity(filename) {
         let regex1 = /ifcfg-.+/i;
         let regex2 = /.+\.xml/i;
-    
+
         return regex1.test(filename) || regex2.test(filename);
     }
 }
 
 function alertIfFileContainsPassword() {
-    passwords = []
+    let passwords = []
     let regex = /<passphrase>.+?<\/passphrase>|<password>.+?<\/password>|<client-key-passwd>.+?<\/client-key-passwd>|<key>.+?<\/key>|<modem-pin>.+?<\/modem-pin>|WIRELESS_WPA_PASSWORD=.+?$|WIRELESS_WPA_PSK=.+?$|WIRELESS_KEY_[0-3]=.+?$|WIRELESS_CLIENT_KEY_PASSWORD=.+?$|PASSWORD=.+?$/gms;
 
     for (let child of getFiles(document.getElementById('file-container'))) {
