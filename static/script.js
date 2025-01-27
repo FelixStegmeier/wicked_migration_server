@@ -186,6 +186,7 @@ function autoResize(textarea) {
     textarea.style.height = "auto";
     textarea.style.height = textarea.scrollHeight + 'px';
 }
+window.autoResize = autoResize;
 
 function preventDefaults(e) {
     e.preventDefault()
