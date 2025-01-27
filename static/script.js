@@ -88,6 +88,7 @@ function pageSetup() {
                     parsed_json.files.forEach(file =>
                     {
                         createAndAddConfiguredFiles(file);
+                        setFileDividers(document.getElementById('file-result-container'));
                     }
                     )
                     showOrHideConfiguredFiles();
@@ -220,6 +221,7 @@ function handleDrop(e) {
 function addFile(newFile) {
     if (!newFileAlreadyExists(newFile)) {
         createAndAdd(newFile);
+        showOrHideFilePlaceholder('file-container', 'file-placeholder');
     }
 }
 
@@ -250,8 +252,6 @@ function createAndAdd(newFile) {
 
     let fileContainer = document.getElementById('file-container');
     fileContainer.appendChild(node);
-
-    showOrHideFilePlaceholder('file-container', 'file-placeholder');
 }
 
 function createAndAddConfiguredFiles(newFile) {
@@ -273,8 +273,6 @@ function createAndAddConfiguredFiles(newFile) {
 
     let fileContainer = document.getElementById('file-result-container');
     fileContainer.appendChild(node);
-
-    setFileDividers(document.getElementById('file-result-container'));
 }
 
 // Returns an array containing only all file elements of node
