@@ -210,7 +210,7 @@ function handleDrop(e) {
     let dt = e.dataTransfer;
     let files = dt.files;
     let file_arr = Array.from(files);
-    file_arr.forEach(addFile);
+    file_arr.forEach(createAndAddWickedFile);
     setFileDividers(document.getElementById('file-container'));
 }
 
