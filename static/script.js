@@ -38,12 +38,13 @@ function pageSetup() {
     });
 
     document.getElementById('reset-files-button').addEventListener('click', function(event) {
-        clearFiles('file-container', 'file-placeholder');
+        clearFiles('file-container');
+        showOrHideFilePlaceholder(target, 'file-placeholder');
         showUserInfo("");
     });
 
     document.getElementById('reset-configured-files-button').addEventListener('click', function(event) {
-        clearFiles('file-result-container', 'file-placeholder-result');
+        clearFiles('file-result-container');
         showUserInfo("");
         showOrHideConfiguredFiles();
     });
@@ -79,13 +80,14 @@ function pageSetup() {
         }).then(response => {
             if (response.ok) {
                 response.json().then(json => {
-                    clearFiles('file-result-container', 'file-placeholder-result');
+                    clearFiles('file-result-container');
+
                     let parsed_json = JSON.parse(json);
 
                     showUserInfo(parsed_json.log)
                     parsed_json.files.forEach(file =>
                     {
-                        createAndAddConfiguredFiles(file.fileName, file.fileContent);
+                        createAndAddConfiguredFiles(file);
                     }
                     )
                     showOrHideConfiguredFiles();
@@ -252,7 +254,7 @@ function createAndAdd(newFile) {
     showOrHideFilePlaceholder('file-container', 'file-placeholder');
 }
 
-function createAndAddConfiguredFiles(fileName, fileContent) {
+function createAndAddConfiguredFiles(newFile) {
     const templateRef = document.getElementById("file-template");
     let node = templateRef.content.cloneNode(true);
 
@@ -263,17 +265,14 @@ function createAndAddConfiguredFiles(fileName, fileContent) {
         let element = event.target.closest("#file");
         element.parentNode.removeChild(element);
         setFileDividers(document.getElementById('file-result-container'));
-        showOrHideFilePlaceholder('file-result-container', 'file-placeholder-result');
         showOrHideConfiguredFiles();
     });
 
-    node.querySelector("#file-name").value = fileName;
-    fileTextArea.value = fileContent;
+    node.querySelector("#file-name").value = newFile.fileName;
+    fileTextArea.value = newFile.fileContent;
 
     let fileContainer = document.getElementById('file-result-container');
     fileContainer.appendChild(node);
-
-    showOrHideFilePlaceholder('file-result-container', 'file-placeholder-result');
 }
 
 // Returns an array containing only all file elements of node
@@ -312,9 +311,8 @@ function newFileAlreadyExists(newFile) {
     return false;
 }
 
-function clearFiles(target, placeholder) {
+function clearFiles(target) {
     document.getElementById(target).innerHTML = "";
-    showOrHideFilePlaceholder(target, placeholder);
 }
 
 function downloadURL(url, name) {
