@@ -77,7 +77,6 @@ function pageSetup() {
                 response.json().then(json => {
                     clearFiles('file-result-container', 'file-placeholder-result');
                     let parsed_json = JSON.parse(json);
-                    console.log(parsed_json);
 
                     showUserInfo(parsed_json.log)
                     parsed_json.files.forEach(file =>
