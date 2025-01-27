@@ -119,13 +119,11 @@ function showOrHideConfiguredFiles(){
 
 function showConfigurationResult(){
     document.getElementById('download-nm-files-button').disabled = false;
-    document.getElementById('download-nm-files-button').style.backgroundColor = "#4CAF50";
     document.getElementById('migration-result-container').style.display= "block";
 }
 
 function hideConfigurationResult(){
     document.getElementById('download-nm-files-button').disabled = true;
-    document.getElementById('download-nm-files-button').style.backgroundColor = "#8b958c";
     document.getElementById('migration-result-container').style.display = "none";
 }
 

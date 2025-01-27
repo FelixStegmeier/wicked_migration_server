@@ -117,13 +117,13 @@ h3 {
 #migration-result-container{
     margin-top: 20px;
     margin-left: 20px;
-    width: 100%;
+    flex: 1;
     display: none;
 }
 
 #input-container {
     margin-top: 20px;
-    width: 100%;
+    flex: 1;
 }
 
 pre {
@@ -162,10 +162,14 @@ button {
 }
 
 #download-nm-files-button {
-    background-color: #8b958c;
+    background-color: #4CAF50;
     padding: 10px 20px;
     transition: background-color 0.3s;
     min-height: 50px;
+}
+
+#download-nm-files-button:disabled {
+    background-color: #8b958c;
 }
 
 #submit-button:hover {
