@@ -47,6 +47,10 @@ function pageSetup() {
         showUserInfo("");
         showOrHideConfiguredFiles();
     });
+    
+    document.getElementById('download-nm-files-button').addEventListener('click', function(event) {
+        downloadFiles();
+    });
 
     document.getElementById('submit-button').addEventListener('click', function(event) {
         let files = getFilesContent();
@@ -98,10 +102,6 @@ function pageSetup() {
         })
 
         showUserInfo("");
-
-        document.getElementById('download-nm-files-button').addEventListener('click', function(event) {
-            downloadFiles();
-        });
     });
 }
 
