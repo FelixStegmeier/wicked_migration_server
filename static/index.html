@@ -4,10 +4,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
   <link rel="icon" href="data:,">
   <link rel="stylesheet" type="text/css" href="style.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" />
 </head>
 
 <body class="body" ondragstart="return false;" ondrop="return false;">
@@ -37,7 +35,6 @@
           </div>
         </div>
       </div>
-
       <div id="migration-result-container">
         <div id="configured-files-header">
           <h3>Configured files</h3>
@@ -73,10 +70,10 @@
         </ul>
         <ul>
           <li>
-            <a href="https://www.opensuse.org/" target="_blank" class="footer-icon-link" id="opensuse-link"><i class="fa-brands fa-opensuse"></i></a>
+            <a href="https://www.opensuse.org/" target="_blank" class="footer-icon-link" id="opensuse-link"><img src="icons/opensuse.svg" alt="opensuse icon" width="50" height="50"></a>
           </li>
           <li>
-            <a href="https://github.com/FelixStegmeier/wicked_migration_server" target="_blank" class="footer-icon-link" id="github-link"><i class="fa-brands fa-github"></i></a>
+            <a href="https://github.com/FelixStegmeier/wicked_migration_server" target="_blank" class="footer-icon-link" id="github-link"><img src="icons/github.svg" alt="github icon" width="50" height="50"></a>
           </li>
         </ul>
       </div>
@@ -88,7 +85,7 @@
     <div class="file" id="file">
       <div class="file-header">
         <input type="text" id="file-name">
-        <button class="remove-file-button" id="remove-button"><i class="fa-solid fa-trash"></i></button>
+        <button class="remove-file-button" id="remove-button"><img src="icons/trash.svg" alt="-" width="20" height="20"></button>
       </div>
       <div class="file-content">
         <textarea spellcheck="false" oninput="autoResize(this)" id="file-content-textarea"></textarea>
