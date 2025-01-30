@@ -35,18 +35,14 @@ main {
 #content {
     display: flex;
     flex-direction: column;
-
-    margin-left: 20px;
-    margin-right: 20px;
+    margin-left: 40px;
+    margin-right: 40px;
     margin-bottom: auto;
 }
 
 #migration-files{
     display: flex;
     flex-direction: row;
-
-    margin-left: 20px;
-    margin-right: 20px;
     margin-bottom: auto;
 }
 
