@@ -1,5 +1,5 @@
 [package]
-name = "AgamaMirgrationServer"
+name = "WickedMirgrationServer"
 version = "0.1.0"
 edition = "2021"
 
@@ -21,3 +21,7 @@ features = [
     "fast-rng",          # Use a faster (but still sufficiently random) RNG
     "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
 ]
+
+[[bin]]
+name = "wicked_migration_server"
+path = "src/main.rs"
