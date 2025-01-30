@@ -173,6 +173,9 @@ button {
 }
 
 .remove-file-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background-color: crimson;
     color: white;
     padding-bottom: 1px;
