@@ -5,7 +5,6 @@ use axum::extract::{Multipart, OriginalUri, Path, State};
 use axum::response::{Redirect, Response};
 use axum::{http::StatusCode, response::IntoResponse};
 use rusqlite::Connection;
-use std::fs;
 use std::str::{self, FromStr};
 
 use crate::files::{File, FileType};
@@ -132,7 +131,7 @@ pub async fn redirect_post_multipart_form(
     if uri.to_string() == "/json" {
         Redirect::to(&format!("/json/{}", uuid)).into_response()
     } else {
-        Redirect::to(&format!("/{}", uuid)).into_response()
+        Redirect::to(&format!("/tar/{}", uuid)).into_response()
     }
 }
 
@@ -149,9 +148,5 @@ pub async fn redirect(State(shared_state): State<AppState>, data_string: String)
         Err(e) => return e.into_response(),
     };
 
-    Redirect::to(&format!("/{}", uuid)).into_response()
-}
-
-pub async fn browser_html() -> Response {
-    axum::response::Html(fs::read_to_string("static/main.html").unwrap()).into_response()
+    Redirect::to(&format!("/tar/{}", uuid)).into_response()
 }

@@ -8,21 +8,24 @@ use axum::{
 };
 use clap::Parser;
 use db_util::{async_db_cleanup, create_db};
-use routes::{
-    browser_html, redirect, redirect_post_multipart_form, return_config_file, return_config_json,
-};
+use routes::{redirect, redirect_post_multipart_form, return_config_file, return_config_json};
 use rusqlite::Connection;
 use std::{fs::create_dir_all, sync::Arc};
 use tokio::sync::Mutex;
-use tower_http::services::ServeFile;
+use tower_http::services::ServeDir;
 
 const DEFAULT_DB_PATH: &str = "/var/lib/wicked_migration_server/db.db3";
+const DEFAULT_STATIC_FILE_PATH: &str = "./static";
 
 #[derive(Parser)]
 #[command(about = "Server to host Wicked config migration", long_about = None)]
 struct Args {
-    #[arg(default_value_t = DEFAULT_DB_PATH.to_string())]
+    /// Path where the database is located, or is created if it doesn't exist.
+    #[arg(long, short, default_value_t = DEFAULT_DB_PATH.to_string())]
     db_path: String,
+    /// Path where the static files are located.
+    #[arg(long, short, default_value_t = DEFAULT_STATIC_FILE_PATH.to_string())]
+    static_path: String,
 }
 #[derive(Clone)]
 struct AppState {
@@ -32,7 +35,9 @@ struct AppState {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
+
     let db_path = args.db_path;
+    let static_path = args.static_path;
 
     if db_path == DEFAULT_DB_PATH {
         if let Some(path) = std::path::Path::new(&db_path).parent() {
@@ -52,15 +57,13 @@ async fn main() {
     let app_state = AppState { database: db_data };
 
     let app = Router::new()
-        .route("/:uuid", get(return_config_file))
+        .route("/tar/:uuid", get(return_config_file))
         .route("/json/:uuid", get(return_config_json))
-        .route("/", get(browser_html))
-        .route_service("/style.css", ServeFile::new("static/style.css"))
-        .route_service("/script.js", ServeFile::new("static/script.js"))
-        .route_service("/tar_writer.js", ServeFile::new("static/tar_writer.js"))
         .route("/multipart", post(redirect_post_multipart_form))
         .route("/json", post(redirect_post_multipart_form))
         .route("/", post(redirect))
+        .route("/", axum::routing::get_service(ServeDir::new(&static_path)))
+        .fallback_service(ServeDir::new(static_path))
         .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
