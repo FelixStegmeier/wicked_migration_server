@@ -35,8 +35,8 @@ main {
 #content {
     display: flex;
     flex-direction: column;
-    margin-left: 40px;
-    margin-right: 40px;
+    margin-left: 20px;
+    margin-right: 20px;
     margin-bottom: auto;
 }
 
