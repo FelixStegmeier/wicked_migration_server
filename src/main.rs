@@ -49,15 +49,14 @@ async fn main() {
 
     let app_state = AppState { database: db_data };
 
-
     let app = Router::new()
         .route("/tar/:uuid", get(return_config_file))
         .route("/json/:uuid", get(return_config_json))
         .route("/multipart", post(redirect_post_multipart_form))
         .route("/json", post(redirect_post_multipart_form))
+        .route("/", post(redirect))
         .route("/", axum::routing::get_service(ServeDir::new("static/")))
         .fallback_service(ServeDir::new("static/"))
-        .route("/", post(redirect))
         .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
@@ -65,5 +64,4 @@ async fn main() {
         .unwrap();
 
     axum::serve(listener, app).await.unwrap();
-
 }
