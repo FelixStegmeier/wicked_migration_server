@@ -51,7 +51,7 @@ async fn main() {
 
 
     let app = Router::new()
-        .route("/id/:uuid", get(return_config_file))
+        .route("/tar/:uuid", get(return_config_file))
         .route("/json/:uuid", get(return_config_json))
         .route("/multipart", post(redirect_post_multipart_form))
         .route("/json", post(redirect_post_multipart_form))

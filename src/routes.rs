@@ -131,7 +131,7 @@ pub async fn redirect_post_multipart_form(
     if uri.to_string() == "/json" {
         Redirect::to(&format!("/json/{}", uuid)).into_response()
     } else {
-        Redirect::to(&format!("/{}", uuid)).into_response()
+        Redirect::to(&format!("/tar/{}", uuid)).into_response()
     }
 }
 
@@ -148,5 +148,5 @@ pub async fn redirect(State(shared_state): State<AppState>, data_string: String)
         Err(e) => return e.into_response(),
     };
 
-    Redirect::to(&format!("/{}", uuid)).into_response()
+    Redirect::to(&format!("/tar/{}", uuid)).into_response()
 }
