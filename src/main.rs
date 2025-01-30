@@ -16,13 +16,16 @@ use tower_http::services::ServeDir;
 
 const DEFAULT_DB_PATH: &str = "/var/lib/wicked_migration_server/db.db3";
 const DEFAULT_STATIC_FILE_PATH: &str = "./static";
+
 #[derive(Parser)]
 #[command(about = "Server to host Wicked config migration", long_about = None)]
 struct Args {
-    #[arg(default_value_t = DEFAULT_DB_PATH.to_string())]
+    /// Path where the database is located, or is created if it doesn't exist.
+    #[arg(long, short, default_value_t = DEFAULT_DB_PATH.to_string())]
     db_path: String,
-    #[arg(default_value_t = DEFAULT_STATIC_FILE_PATH.to_string())]
-    static_files: String,
+    /// Path where the static files are located.
+    #[arg(long, short, default_value_t = DEFAULT_STATIC_FILE_PATH.to_string())]
+    static_path: String,
 }
 #[derive(Clone)]
 struct AppState {
@@ -32,8 +35,9 @@ struct AppState {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
+
     let db_path = args.db_path;
-    let static_files_path = args.static_files;
+    let static_path = args.static_path;
 
     if db_path == DEFAULT_DB_PATH {
         if let Some(path) = std::path::Path::new(&db_path).parent() {
@@ -58,8 +62,8 @@ async fn main() {
         .route("/multipart", post(redirect_post_multipart_form))
         .route("/json", post(redirect_post_multipart_form))
         .route("/", post(redirect))
-        .route("/", axum::routing::get_service(ServeDir::new(&static_files_path)))
-        .fallback_service(ServeDir::new(static_files_path))
+        .route("/", axum::routing::get_service(ServeDir::new(&static_path)))
+        .fallback_service(ServeDir::new(static_path))
         .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
