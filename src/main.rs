@@ -8,9 +8,7 @@ use axum::{
 };
 use clap::Parser;
 use db_util::{async_db_cleanup, create_db};
-use routes::{
-    browser_html, redirect, redirect_post_multipart_form, return_config_file, return_config_json,
-};
+use routes::{redirect, redirect_post_multipart_form, return_config_file, return_config_json};
 use rusqlite::Connection;
 use std::{fs::create_dir_all, sync::Arc};
 use tokio::sync::Mutex;
