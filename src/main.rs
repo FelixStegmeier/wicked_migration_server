@@ -16,6 +16,8 @@ use tower_http::services::ServeDir;
 
 const DEFAULT_DB_PATH: &str = "/var/lib/wicked_migration_server/db.db3";
 const DEFAULT_STATIC_FILE_PATH: &str = "./static";
+const DEFAULT_IP_ADDRESS: &str = "0.0.0.0";
+const DEFAULT_PORT: &str = "8080";
 
 #[derive(Parser)]
 #[command(about = "Server to host Wicked config migration", long_about = None)]
@@ -26,6 +28,12 @@ struct Args {
     /// Path where the static files are located.
     #[arg(long, short, default_value_t = DEFAULT_STATIC_FILE_PATH.to_string())]
     static_path: String,
+    /// IP address the server will bind to
+    #[arg(long, short, default_value_t = DEFAULT_IP_ADDRESS.to_string())]
+    ip_address: String,
+    /// Port the server will listen on.
+    #[arg(long, short, default_value_t = DEFAULT_PORT.to_string())]
+    port: String,
 }
 #[derive(Clone)]
 struct AppState {
@@ -38,6 +46,7 @@ async fn main() {
 
     let db_path = args.db_path;
     let static_path = args.static_path;
+    let bind_addr = format!("{}:{}", args.ip_address, &args.port);
 
     if db_path == DEFAULT_DB_PATH {
         if let Some(path) = std::path::Path::new(&db_path).parent() {
@@ -66,7 +75,7 @@ async fn main() {
         .fallback_service(ServeDir::new(static_path))
         .with_state(app_state);
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+    let listener = tokio::net::TcpListener::bind(bind_addr)
         .await
         .unwrap();
 
