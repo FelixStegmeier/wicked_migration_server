@@ -10,8 +10,8 @@ use clap::Parser;
 use db_util::{async_db_cleanup, create_db};
 use routes::{redirect, redirect_post_multipart_form, return_config_file, return_config_json};
 use rusqlite::Connection;
-use std::{fs::create_dir_all, sync::Arc};
-use tokio::sync::Mutex;
+use std::{cmp::max, fs::create_dir_all, num::NonZeroUsize, sync::Arc, thread};
+use tokio::{runtime::Builder, sync::Mutex};
 use tower_http::services::ServeDir;
 
 const DEFAULT_DB_PATH: &str = "/var/lib/wicked_migration_server/db.db3";
@@ -35,13 +35,13 @@ struct Args {
     #[arg(long, short, default_value_t = DEFAULT_PORT.to_string())]
     port: String,
 }
+
 #[derive(Clone)]
 struct AppState {
     database: Arc<Mutex<Connection>>,
 }
 
-#[tokio::main]
-async fn main() {
+async fn async_main() {
     let args = Args::parse();
 
     let db_path = args.db_path;
@@ -75,9 +75,21 @@ async fn main() {
         .fallback_service(ServeDir::new(static_path))
         .with_state(app_state);
 
-    let listener = tokio::net::TcpListener::bind(bind_addr)
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind(bind_addr).await.unwrap();
 
     axum::serve(listener, app).await.unwrap();
+}
+
+fn main() {
+    let num_cores = thread::available_parallelism().map_or(1, NonZeroUsize::get);
+
+    let worker_threads = max(2, num_cores);
+
+    let runtime = Builder::new_multi_thread()
+        .worker_threads(worker_threads)
+        .enable_all()
+        .build()
+        .expect("Failed to build Tokio runtime");
+
+    runtime.block_on(async_main());
 }
