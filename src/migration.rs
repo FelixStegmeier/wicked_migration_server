@@ -11,7 +11,7 @@ use std::process::Command;
 use tempfile::Builder;
 use thiserror::Error;
 
-const REGISTRY_URL:&str = "registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/migrate-wicked-git:latest";
+const REGISTRY_URL:&str = "registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/wicked2nm:latest";
 
 #[derive(Error, Debug)]
 pub enum MigrateError {
@@ -57,15 +57,15 @@ fn migrate_files(
 
     let arguments_str = if files[0].file_type == FileType::Ifcfg {
         format!(
-            "run -e \"MIGRATE_WICKED_CONTINUE_MIGRATION=true\" --rm -v {}:/etc/sysconfig/network:z {}",
+            "run -e \"W2NM_CONTINUE_MIGRATION=true\" -e \"W2NM_WITHOUT_NETCONFIG=true\" --rm -v {}:/etc/sysconfig/network:z {}",
             migration_target_path,
-                REGISTRY_URL
+            REGISTRY_URL
         )
     } else {
         format!("run --rm -v {}:/migration-tmpdir:z {} bash -c
-            \"migrate-wicked migrate -c /migration-tmpdir/ && mkdir /migration-tmpdir/NM-migrated && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated\"",
+            \"wicked2nm migrate -c --without-netconfig /migration-tmpdir/ && mkdir /migration-tmpdir/NM-migrated && cp -r /etc/NetworkManager/system-connections /migration-tmpdir/NM-migrated\"",
             migration_target_path,
-                REGISTRY_URL,
+            REGISTRY_URL,
         )
     };
 
