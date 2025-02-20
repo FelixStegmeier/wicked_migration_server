@@ -11,7 +11,8 @@ use std::process::Command;
 use tempfile::Builder;
 use thiserror::Error;
 
-const REGISTRY_URL:&str = "registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/wicked2nm:latest";
+const REGISTRY_URL: &str =
+    "registry.opensuse.org/home/jcronenberg/migrate-wicked/containers/opensuse/wicked2nm:latest";
 
 #[derive(Error, Debug)]
 pub enum MigrateError {
@@ -93,4 +94,14 @@ pub fn migrate(files: Vec<File>, database: &Connection) -> Result<String, Migrat
 
     let uuid = add_migration_result_to_db(migration_target_path, log, database)?;
     Ok(uuid)
+}
+
+pub fn pull_latest_migration_image() -> anyhow::Result<()> {
+    let output = Command::new("podman")
+        .args(shlex::split(&format!("pull {}", REGISTRY_URL)).unwrap())
+        .output()?;
+    if !output.status.success() {
+        anyhow::bail!("{}", String::from_utf8_lossy(&output.stderr));
+    }
+    Ok(())
 }
