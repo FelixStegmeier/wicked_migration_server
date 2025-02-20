@@ -7,7 +7,8 @@ use axum::{
     Router,
 };
 use clap::Parser;
-use db_util::{async_db_cleanup, create_db};
+use db_util::{create_db, rm_file_after_expiration};
+use migration::pull_latest_migration_image;
 use routes::{redirect, redirect_post_multipart_form, return_config_file, return_config_json};
 use rusqlite::Connection;
 use std::{cmp::max, fs::create_dir_all, num::NonZeroUsize, sync::Arc, thread};
@@ -41,6 +42,26 @@ struct AppState {
     database: Arc<Mutex<Connection>>,
 }
 
+async fn async_jobs(db_clone: Arc<Mutex<Connection>>) -> ! {
+    let mut loop_counter: u32 = 60;
+    loop {
+        match rm_file_after_expiration(&db_clone).await {
+            Ok(ok) => ok,
+            Err(e) => eprintln!("Error when running file cleanup: {}", e),
+        };
+
+        loop_counter += 1;
+        if loop_counter >= 60 {
+            loop_counter = 0;
+            if let Err(e) = pull_latest_migration_image() {
+                eprintln!("Failed to pull newest migration image: {e}");
+            }
+        }
+
+        std::thread::sleep(std::time::Duration::from_secs(15));
+    }
+}
+
 async fn async_main() {
     let args = Args::parse();
 
@@ -61,7 +82,7 @@ async fn async_main() {
 
     let db_data: Arc<Mutex<Connection>> = Arc::new(Mutex::new(database));
 
-    tokio::spawn(async_db_cleanup(db_data.clone()));
+    tokio::spawn(async_jobs(db_data.clone()));
 
     let app_state = AppState { database: db_data };
 
@@ -76,7 +97,6 @@ async fn async_main() {
         .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind(bind_addr).await.unwrap();
-
     axum::serve(listener, app).await.unwrap();
 }
 

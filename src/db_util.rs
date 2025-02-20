@@ -127,13 +127,3 @@ pub fn delete_db_entry(uuid: &str, database: &Connection) -> anyhow::Result<()> 
 
     Ok(())
 }
-
-pub async fn async_db_cleanup(db_clone: Arc<Mutex<Connection>>) -> ! {
-    loop {
-        match rm_file_after_expiration(&db_clone).await {
-            Ok(ok) => ok,
-            Err(e) => eprintln!("Error when running file cleanup: {}", e),
-        };
-        std::thread::sleep(std::time::Duration::from_secs(15));
-    }
-}
