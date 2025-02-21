@@ -68,6 +68,10 @@ function pageSetup() {
             return;
         }
 
+        if (!alertIfDuplicateFileName()){
+            return;
+        }
+
         if (files.length <= 0) {
             showUserInfo("Please add a file first");
             return;
@@ -353,4 +357,23 @@ function alertIfFileContainsPassword() {
         return confirm("You have password(s) in your file. Consider removing it: " + pswd_str + "\n\nThis will be sent to the server, do you want to continue anyway?");
     }
     return true;
+}
+
+function alertIfDuplicateFileName() {
+    let fileNames = []
+    let duplicates = []
+
+    for (let child of getFiles(document.getElementById('file-container'))) {
+        let fileName = child.querySelector('#file-name').value;
+        if (fileNames.includes(fileName)){
+            duplicates.push(fileName)
+        }
+        fileNames.push(fileName)
+    }
+
+    if(duplicates.length > 0){
+        let duplicates_str = duplicates.join('\n');
+        return confirm("You have duplicate config names:\n" + duplicates_str + "\n\nConfigs with duplicate names are ignored in the migration");
+    }
+    return true
 }
