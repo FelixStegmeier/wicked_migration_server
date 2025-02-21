@@ -233,6 +233,10 @@ input[type="file"] {
     background-color: silver;
 }
 
+#add-empty-file{
+    display: none;
+}
+
 #reset-files-button {
     display: none;
 }
