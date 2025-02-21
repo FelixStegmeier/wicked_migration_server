@@ -64,6 +64,10 @@ function pageSetup() {
             return;
         }
 
+        if(!alertIfFileIsEmpty()){
+            return
+        }
+
         if (files.length <= 0) {
             showUserInfo("Please add a file first");
             return;
@@ -341,4 +345,14 @@ function alertIfFileContainsPassword() {
         return confirm("You have password(s) in your file. Consider removing it: " + pswd_str + "\n\nThis will be sent to the server, do you want to continue anyway?");
     }
     return true;
+}
+
+function alertIfFileIsEmpty() {
+    for (let child of getFiles(document.getElementById('file-container'))) {
+        let fileText = child.querySelector('#file-content-textarea').value;
+        if (fileText.trim() == ""){
+            return confirm("One of your files has no content, do you want to continue anyway?");
+        }
+    }
+    return true
 }
