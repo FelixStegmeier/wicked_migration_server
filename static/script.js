@@ -37,6 +37,10 @@ function pageSetup() {
         setFileDividers(document.getElementById('file-container'));
     });
 
+    document.getElementById('add-empty-file').addEventListener('click', function(event) {
+        createAndAddWickedFile() 
+    });
+
     document.getElementById('reset-files-button').addEventListener('click', function(event) {
         clearFiles('file-container');
         showOrHideFilePlaceholder();
@@ -215,11 +219,19 @@ function handleDrop(e) {
 }
 
 //Adds a wicked file to the dom if it doesn't exist already
-async function createAndAddWickedFile(file) {
-    if (newFileAlreadyExists(file)) {
-        return
+async function createAndAddWickedFile(file = null) {
+    let fileContent = ""
+    let fileName = ""
+
+    if (file) {
+        if (newFileAlreadyExists(file)) {
+            return
+        }
+        fileContent = await file.text()
+        fileName = file.name
     }
-    const node = createAndAddFile(file.name, await file.text(), 'file-container', function(event) {
+
+    createAndAddFile(fileName, fileContent, 'file-container', function(event) {
         let element = event.target.closest("#file");
         element.parentNode.removeChild(element);
         setFileDividers(document.getElementById('file-container'));
