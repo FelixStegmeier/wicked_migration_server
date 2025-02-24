@@ -58,27 +58,31 @@ function pageSetup() {
     });
 
     document.getElementById('submit-button').addEventListener('click', function(event) {
-        let files = getFilesContent();
+        const fileElements = getFiles(document.getElementById('file-container'));
+        const filesContent = getFilesContent(fileElements);
 
-        if(!fileNamesAreValid()){
+        if(!fileNamesAreValid(fileElements)){
             return;
         }
 
-        if(!alertIfFileContainsPassword()){
+        if(!alertIfFileContainsPassword(fileElements)){
             return;
         }
 
-        if (!alertIfDuplicateFileName()){
+        if(!alertIfFileIsEmpty(fileElements)){
+            return
+        }
+        if (!alertIfDuplicateFileName(fileElements)){
             return;
         }
-
-        if (files.length <= 0) {
+      
+        if (filesContent.length <= 0) {        
             showUserInfo("Please add a file first");
             return;
         }
 
         let formData = new FormData();
-        files.forEach(element => {
+        filesContent.forEach(element => {
             formData.append('files[]', element);
         });
 
@@ -150,10 +154,10 @@ function showUserInfo(text) {
     }
 }
 
-function getFilesContent() {
+function getFilesContent(fileElements) {
     let files = [];
 
-    for (let child of getFiles(document.getElementById('file-container'))) {
+    for (let child of fileElements) {
         let blob = new Blob([child.querySelector('#file-content-textarea').value], {
             type: 'text/plain'
         });
@@ -304,10 +308,10 @@ function downloadURL(url, name) {
     URL.revokeObjectURL(link);
 }
 
-function fileNamesAreValid(){
+function fileNamesAreValid(files){
     let invalidNames = []
 
-    for (let child of getFiles(document.getElementById('file-container'))) {
+    for (let child of files) {
         let filename = child.querySelector('#file-name').value;
         if(!checkFilenameValidity(filename)){
             invalidNames.push(filename);
@@ -328,11 +332,11 @@ function fileNamesAreValid(){
     }
 }
 
-function alertIfFileContainsPassword() {
+function alertIfFileContainsPassword(files) {
     let passwords = []
     let regex = /<passphrase>.+?<\/passphrase>|<password>.+?<\/password>|<client-key-passwd>.+?<\/client-key-passwd>|<key>.+?<\/key>|<modem-pin>.+?<\/modem-pin>|WIRELESS_WPA_PASSWORD=.+?$|WIRELESS_WPA_PSK=.+?$|WIRELESS_KEY_[0-3]=.+?$|WIRELESS_CLIENT_KEY_PASSWORD=.+?$|PASSWORD=.+?$/gms;
 
-    for (let child of getFiles(document.getElementById('file-container'))) {
+    for (let child of files) {
         let fileText = child.querySelector('#file-content-textarea').value;
         if (regex.test(fileText)){
             passwords.push(...fileText.match(regex));
@@ -346,11 +350,21 @@ function alertIfFileContainsPassword() {
     return true;
 }
 
-function alertIfDuplicateFileName() {
+function alertIfFileIsEmpty(files) {
+    for (let child of files) {
+        let fileText = child.querySelector('#file-content-textarea').value;
+        if (fileText.trim() == ""){
+            return confirm("One of your files has no content, do you want to continue anyway?");
+        }
+    }
+    return true
+}
+
+function alertIfDuplicateFileName(files) {
     let fileNames = []
     let duplicates = ""
 
-    for (let child of getFiles(document.getElementById('file-container'))) {
+    for (let child of files) {
         let fileName = child.querySelector('#file-name').value;
         if (fileNames.includes(fileName)){
             duplicates = duplicates.concat(fileName, "\n")
