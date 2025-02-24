@@ -68,6 +68,10 @@ function pageSetup() {
             return;
         }
 
+        if (!alertIfDuplicateFileName()){
+            return;
+        }
+
         if (files.length <= 0) {
             showUserInfo("Please add a file first");
             return;
@@ -224,9 +228,6 @@ async function createAndAddWickedFile(file = null) {
     let fileName = ""
 
     if (file) {
-        if (newFileAlreadyExists(file)) {
-            return
-        }
         fileContent = await file.text()
         fileName = file.name
     }
@@ -289,16 +290,6 @@ function showOrHideFilePlaceholder() {
     document.getElementById('file-placeholder').hidden = getFiles(document.getElementById('file-container')).length != 0;
 }
 
-function newFileAlreadyExists(newFile) {
-    let name = newFile.name;
-    for (let child of getFiles(document.getElementById('file-container'))) {
-        if (child.querySelector('#file-name').value === name) {
-            return true;
-        }
-    }
-    return false;
-}
-
 function clearFiles(target) {
     document.getElementById(target).innerHTML = "";
 }
@@ -353,4 +344,22 @@ function alertIfFileContainsPassword() {
         return confirm("You have password(s) in your file. Consider removing it: " + pswd_str + "\n\nThis will be sent to the server, do you want to continue anyway?");
     }
     return true;
+}
+
+function alertIfDuplicateFileName() {
+    let fileNames = []
+    let duplicates = ""
+
+    for (let child of getFiles(document.getElementById('file-container'))) {
+        let fileName = child.querySelector('#file-name').value;
+        if (fileNames.includes(fileName)){
+            duplicates = duplicates.concat(fileName, "\n")
+        }
+        fileNames.push(fileName)
+    }
+
+    if(duplicates != ""){
+        return confirm("You have duplicate config names:\n" + duplicates + "\nConfigs with duplicate names are ignored in the migration");
+    }
+    return true
 }
