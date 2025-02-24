@@ -37,6 +37,10 @@ function pageSetup() {
         setFileDividers(document.getElementById('file-container'));
     });
 
+    document.getElementById('add-empty-file').addEventListener('click', function(event) {
+        createAndAddWickedFile() 
+    });
+
     document.getElementById('reset-files-button').addEventListener('click', function(event) {
         clearFiles('file-container');
         showOrHideFilePlaceholder();
@@ -68,8 +72,11 @@ function pageSetup() {
         if(!alertIfFileIsEmpty(fileElements)){
             return
         }
-
-        if (filesContent.length <= 0) {
+        if (!alertIfDuplicateFileName(fileElements)){
+            return;
+        }
+      
+        if (filesContent.length <= 0) {        
             showUserInfo("Please add a file first");
             return;
         }
@@ -220,11 +227,16 @@ function handleDrop(e) {
 }
 
 //Adds a wicked file to the dom if it doesn't exist already
-async function createAndAddWickedFile(file) {
-    if (newFileAlreadyExists(file)) {
-        return
+async function createAndAddWickedFile(file = null) {
+    let fileContent = ""
+    let fileName = ""
+
+    if (file) {
+        fileContent = await file.text()
+        fileName = file.name
     }
-    const node = createAndAddFile(file.name, await file.text(), 'file-container', function(event) {
+
+    createAndAddFile(fileName, fileContent, 'file-container', function(event) {
         let element = event.target.closest("#file");
         element.parentNode.removeChild(element);
         setFileDividers(document.getElementById('file-container'));
@@ -280,16 +292,6 @@ function setFileDividers(node) {
 // If there are no files present a placeholder is shown, otherwise it gets hidden
 function showOrHideFilePlaceholder() {
     document.getElementById('file-placeholder').hidden = getFiles(document.getElementById('file-container')).length != 0;
-}
-
-function newFileAlreadyExists(newFile) {
-    let name = newFile.name;
-    for (let child of getFiles(document.getElementById('file-container'))) {
-        if (child.querySelector('#file-name').value === name) {
-            return true;
-        }
-    }
-    return false;
 }
 
 function clearFiles(target) {
@@ -354,6 +356,24 @@ function alertIfFileIsEmpty(files) {
         if (fileText.trim() == ""){
             return confirm("One of your files has no content, do you want to continue anyway?");
         }
+    }
+    return true
+}
+
+function alertIfDuplicateFileName(files) {
+    let fileNames = []
+    let duplicates = ""
+
+    for (let child of files) {
+        let fileName = child.querySelector('#file-name').value;
+        if (fileNames.includes(fileName)){
+            duplicates = duplicates.concat(fileName, "\n")
+        }
+        fileNames.push(fileName)
+    }
+
+    if(duplicates != ""){
+        return confirm("You have duplicate config names:\n" + duplicates + "\nConfigs with duplicate names are ignored in the migration");
     }
     return true
 }
