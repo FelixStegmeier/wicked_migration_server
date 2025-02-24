@@ -306,10 +306,11 @@ function downloadURL(url, name) {
 
 function fileNamesAreValid(){
     let invalidNames = []
+    let regex = /ifcfg-.+|ifroute-.+|routes|.+\.xml/i;
 
     for (let child of getFiles(document.getElementById('file-container'))) {
         let filename = child.querySelector('#file-name').value;
-        if(!checkFilenameValidity(filename)){
+        if(!regex.test(filename)){
             invalidNames.push(filename);
         }
     }
@@ -319,12 +320,6 @@ function fileNamesAreValid(){
     }
     else{
         return true;
-    }
-    function checkFilenameValidity(filename) {
-        let regex1 = /ifcfg-.+/i;
-        let regex2 = /.+\.xml/i;
-
-        return regex1.test(filename) || regex2.test(filename);
     }
 }
 
