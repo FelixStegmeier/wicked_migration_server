@@ -1,0 +1,17 @@
+[Unit]
+Description=Wicked migration server
+After=network.target
+
+[Service]
+User=user
+Group=group
+WorkingDirectory=/home/user/wicked_migration_server/
+ExecStart=/home/user/wicked_migration_server/target/release/wicked_migration_server -i localhost -p 8080 -s /home/user/wicked_migration_server/static/ -d /home/user/wicked_migration_server/db.db3
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
