@@ -58,8 +58,8 @@ function pageSetup() {
     });
 
     document.getElementById('submit-button').addEventListener('click', function(event) {
-        let fileElements = getFiles(document.getElementById('file-container'));
-        let filesContent = getFilesContent(fileElements);
+        const fileElements = getFiles(document.getElementById('file-container'));
+        const filesContent = getFilesContent(fileElements);
 
         if(!fileNamesAreValid(fileElements)){
             return;
@@ -154,10 +154,10 @@ function showUserInfo(text) {
     }
 }
 
-function getFilesContent(fileElement) {
+function getFilesContent(fileElements) {
     let files = [];
 
-    for (let child of fileElement) {
+    for (let child of fileElements) {
         let blob = new Blob([child.querySelector('#file-content-textarea').value], {
             type: 'text/plain'
         });
