@@ -1,0 +1,11 @@
+[Unit]
+Description=Wicked migration server
+After=network.target
+
+[Service]
+ExecStart=wicked_migration_server -i :: -p 8080 -s /srv/wicked_migration_server/html -d /var/lib/wicked_migration_server/db.db3
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
