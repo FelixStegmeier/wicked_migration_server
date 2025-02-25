@@ -18,7 +18,7 @@ use tower_http::services::ServeDir;
 const DEFAULT_DB_PATH: &str = "/var/lib/wicked_migration_server/db.db3";
 const DEFAULT_STATIC_FILE_PATH: &str = "./static";
 const DEFAULT_IP_ADDRESS: &str = "::";
-const DEFAULT_PORT: &str = "8080";
+const DEFAULT_PORT: &str = "80";
 
 #[derive(Parser)]
 #[command(about = "Server to host Wicked config migration", long_about = None)]
