@@ -4,19 +4,22 @@ use std::{fs, str::FromStr};
 #[derive(PartialEq)]
 pub enum FileType {
     Xml,
-    Ifcfg,
+    Sysconfig,
 }
 
 impl FromStr for FileType {
     type Err = anyhow::Error;
-    fn from_str(file_type: &str) -> Result<Self, Self::Err> {
-        match file_type {
-            "text/xml" => Ok(FileType::Xml),
-            "application/xml" => Ok(FileType::Xml),
-            "text/plain" => Ok(FileType::Ifcfg),
-            "application/octet-stream" => Ok(FileType::Ifcfg),
-            _ => Err(anyhow::anyhow!("Unsupported file type: {}", file_type)),
+    fn from_str(file_name: &str) -> Result<Self, Self::Err> {
+        if file_name.contains("ifroute") {
+            return Ok(FileType::Sysconfig);
         }
+        if file_name.contains("ifcfg") {
+            return Ok(FileType::Sysconfig);
+        }
+        if file_name.contains("routes") {
+            return Ok(FileType::Sysconfig);
+        }
+        Ok(FileType::Xml)
     }
 }
 
@@ -68,12 +71,15 @@ pub fn file_arr_from_path(dir_path: String) -> Result<Vec<File>, anyhow::Error> 
         let file_type = match path.extension() {
             Some(file_type) => match file_type.to_str().unwrap() {
                 "xml" => FileType::Xml,
-                _ => FileType::Ifcfg,
+                _ => FileType::Sysconfig,
             },
             None => {
-                return Err(anyhow::anyhow!("File extension was not recognized"));
+                return Err(anyhow::anyhow!(
+                    "There is no such file or file has no file extension"
+                ));
             }
         };
+
         let file_contents = std::fs::read(&path).unwrap();
         file_arr.push(File {
             file_content: String::from_utf8(file_contents).unwrap(),
