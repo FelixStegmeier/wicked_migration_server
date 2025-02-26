@@ -26,10 +26,12 @@ impl FromStr for FileType {
         if file_name.ends_with(".nmconnection") {
             return Ok(FileType::NMconnection);
         }
-        if file_name.ends_with(".xml"){
-            return Ok(FileType::Xml)
+        if file_name.ends_with(".xml") {
+            return Ok(FileType::Xml);
         }
-        Err(anyhow::anyhow!("File type of {file_name} not recognized or supported"))
+        Err(anyhow::anyhow!(
+            "File type of {file_name} not recognized or supported"
+        ))
     }
 }
 
@@ -79,14 +81,7 @@ pub fn file_arr_from_path(dir_path: String) -> Result<Vec<File>, anyhow::Error> 
     for dir_entry in dir {
         let path = dir_entry?.path();
         let file_type = match path.extension() {
-            Some(file_type) => match file_type.to_str().unwrap() {
-                "nmconnection" => FileType::NMconnection,
-                _ => {
-                    return Err(anyhow::anyhow!(
-                        "The returned file is not of type nmconnection"
-                    ))
-                }
-            },
+            Some(file_type) => FileType::from_str(file_type.to_str().unwrap())?,
             None => {
                 return Err(anyhow::anyhow!(format!(
                     "The file path is poorly formatted: {}",
