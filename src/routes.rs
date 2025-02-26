@@ -15,13 +15,6 @@ async fn read_multipart_post_data_to_file_arr(
     let mut data_array: Vec<File> = Vec::new();
 
     while let Some(field) = multipart.next_field().await.unwrap() {
-        let file_type = match field.content_type() {
-            Some(file_type) => file_type,
-            None => return Err(anyhow::anyhow!("Type missing in multipart/form data")),
-        };
-
-        let file_type = FileType::from_str(file_type)?;
-
         let file_name = match field.file_name() {
             Some(file_name) => file_name.to_string(),
             None => {
@@ -30,6 +23,8 @@ async fn read_multipart_post_data_to_file_arr(
                 ))
             }
         };
+
+        let file_type = FileType::from_str(&file_name)?;
 
         let data = field.bytes().await?;
 

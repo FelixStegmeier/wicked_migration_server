@@ -313,25 +313,20 @@ function downloadURL(url, name) {
 
 function fileNamesAreValid(files){
     let invalidNames = []
+    let regex = /^ifcfg.+$|^ifroute-.+$|^routes$|^config$|^dhcp$|^.+\.xml$/i;
 
     for (let child of files) {
         let filename = child.querySelector('#file-name').value;
-        if(!checkFilenameValidity(filename)){
+        if(!regex.test(filename)){
             invalidNames.push(filename);
         }
     }
     if(invalidNames.length > 0){
-        alert("Invalid file names:\n" + invalidNames.join('\n') + "\nvalid name example: ifcfg-interfacename or something.xml")
-        return false;
+        alert("Invalid file names:\n" + invalidNames.join('\n') + "\nValid names are '<name>.xml' or wicked configuration files in '/etc/sysconfig/network' like e.g. 'ifcfg-<interfacename>', 'config', 'routes' or 'dhcp'")
+        return false
     }
     else{
         return true;
-    }
-    function checkFilenameValidity(filename) {
-        let regex1 = /ifcfg-.+/i;
-        let regex2 = /.+\.xml/i;
-
-        return regex1.test(filename) || regex2.test(filename);
     }
 }
 

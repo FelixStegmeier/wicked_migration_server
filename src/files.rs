@@ -4,19 +4,31 @@ use std::{fs, str::FromStr};
 #[derive(PartialEq)]
 pub enum FileType {
     Xml,
-    Ifcfg,
+    Sysconfig,
+    NMconnection,
+    Unknown,
 }
 
 impl FromStr for FileType {
     type Err = anyhow::Error;
-    fn from_str(file_type: &str) -> Result<Self, Self::Err> {
-        match file_type {
-            "text/xml" => Ok(FileType::Xml),
-            "application/xml" => Ok(FileType::Xml),
-            "text/plain" => Ok(FileType::Ifcfg),
-            "application/octet-stream" => Ok(FileType::Ifcfg),
-            _ => Err(anyhow::anyhow!("Unsupported file type: {}", file_type)),
+    fn from_str(file_name: &str) -> Result<Self, Self::Err> {
+        if file_name.starts_with("ifroute-")
+            || file_name.starts_with("ifcfg")
+            || file_name == "routes"
+            || file_name == "config"
+            || file_name == "dhcp"
+        {
+            return Ok(FileType::Sysconfig);
         }
+        if file_name.ends_with(".nmconnection") {
+            return Ok(FileType::NMconnection);
+        }
+        if file_name.ends_with(".xml") {
+            return Ok(FileType::Xml);
+        }
+        Err(anyhow::anyhow!(
+            "File type of {file_name} not recognized or supported"
+        ))
     }
 }
 
@@ -65,15 +77,14 @@ pub fn file_arr_from_path(dir_path: String) -> Result<Vec<File>, anyhow::Error> 
 
     for dir_entry in dir {
         let path = dir_entry?.path();
-        let file_type = match path.extension() {
-            Some(file_type) => match file_type.to_str().unwrap() {
-                "xml" => FileType::Xml,
-                _ => FileType::Ifcfg,
-            },
-            None => {
-                return Err(anyhow::anyhow!("File extension was not recognized"));
-            }
-        };
+        let file_type = FileType::from_str(path.to_str().unwrap()).unwrap_or(FileType::Unknown);
+        if file_type != FileType::NMconnection {
+            eprintln!(
+                "Unexpected file in system-connections dir: {}",
+                path.display()
+            );
+        }
+
         let file_contents = std::fs::read(&path).unwrap();
         file_arr.push(File {
             file_content: String::from_utf8(file_contents).unwrap(),

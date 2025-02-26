@@ -56,7 +56,7 @@ fn migrate_files(
         )?;
     }
 
-    let arguments_str = if files[0].file_type == FileType::Ifcfg {
+    let arguments_str = if files[0].file_type == FileType::Sysconfig {
         format!(
             "run -e \"W2NM_CONTINUE_MIGRATION=true\" -e \"W2NM_WITHOUT_NETCONFIG=true\" --rm -v {}:/etc/sysconfig/network:z {}",
             migration_target_path,
