@@ -306,7 +306,7 @@ function downloadURL(url, name) {
 
 function fileNamesAreValid(){
     let invalidNames = []
-    let regex = /ifcfg-.+|ifroute-.+|routes|.+\.xml/i;
+    let regex = /ifcfg-.+|ifroute-.+|routes|config|.+\.xml/i;
 
     for (let child of getFiles(document.getElementById('file-container'))) {
         let filename = child.querySelector('#file-name').value;
@@ -315,7 +315,8 @@ function fileNamesAreValid(){
         }
     }
     if(invalidNames.length > 0){
-        return confirm("Invalid file names:\n" + invalidNames.join('\n') + "\nvalid name example: ifcfg-<interfacename> ifroute-<name> or <name>.xml and might not be migratable.\nDo you want to continue anyways?")
+        alert("Invalid file names:\n" + invalidNames.join('\n') + "\nValid names are '<name>.xml' or wicked configuration files in '/etc/sysconfig/network' like e.g. 'ifcfg-<interfacename>' or 'config'")
+        return false
     }
     else{
         return true;
