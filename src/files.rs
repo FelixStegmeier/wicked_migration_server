@@ -6,6 +6,7 @@ pub enum FileType {
     Xml,
     Sysconfig,
     NMconnection,
+    Unknown,
 }
 
 impl FromStr for FileType {
@@ -80,15 +81,13 @@ pub fn file_arr_from_path(dir_path: String) -> Result<Vec<File>, anyhow::Error> 
 
     for dir_entry in dir {
         let path = dir_entry?.path();
-        let file_type = match path.extension() {
-            Some(file_type) => FileType::from_str(file_type.to_str().unwrap())?,
-            None => {
-                return Err(anyhow::anyhow!(format!(
-                    "The file path is poorly formatted: {}",
-                    path.to_string_lossy()
-                )));
-            }
-        };
+        let file_type = FileType::from_str(path.to_str().unwrap()).unwrap_or(FileType::Unknown);
+        if file_type != FileType::NMconnection {
+            eprintln!(
+                "Unexpected file in system-connections dir: {}",
+                path.display()
+            );
+        }
 
         let file_contents = std::fs::read(&path).unwrap();
         file_arr.push(File {
