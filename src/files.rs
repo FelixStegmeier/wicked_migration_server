@@ -20,6 +20,9 @@ impl FromStr for FileType {
         if file_name.contains("routes") {
             return Ok(FileType::Sysconfig);
         }
+        if file_name.contains("netconfig") {
+            return Ok(FileType::Sysconfig);
+        }
         if file_name.contains("nmconnection") {
             return Ok(FileType::NMconnection);
         }
