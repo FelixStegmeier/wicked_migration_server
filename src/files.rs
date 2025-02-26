@@ -11,22 +11,25 @@ pub enum FileType {
 impl FromStr for FileType {
     type Err = anyhow::Error;
     fn from_str(file_name: &str) -> Result<Self, Self::Err> {
-        if file_name.contains("ifroute") {
+        if file_name.starts_with("ifroute") {
             return Ok(FileType::Sysconfig);
         }
-        if file_name.contains("ifcfg") {
+        if file_name.starts_with("ifcfg") {
             return Ok(FileType::Sysconfig);
         }
-        if file_name.contains("routes") {
+        if file_name == "routes" {
             return Ok(FileType::Sysconfig);
         }
-        if file_name.contains("netconfig") {
+        if file_name == "config" {
             return Ok(FileType::Sysconfig);
         }
-        if file_name.contains("nmconnection") {
+        if file_name.ends_with(".nmconnection") {
             return Ok(FileType::NMconnection);
         }
-        Ok(FileType::Xml)
+        if file_name.ends_with(".xml"){
+            return Ok(FileType::Xml)
+        }
+        Err(anyhow::anyhow!("File type of {file_name} not recognized or supported"))
     }
 }
 
