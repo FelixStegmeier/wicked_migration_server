@@ -86,6 +86,8 @@ function pageSetup() {
             formData.append('files[]', element);
         });
 
+        document.getElementById('submit-button').disabled = true;
+
         fetch('/json', {
             method: 'POST',
             body: formData,
@@ -102,6 +104,7 @@ function pageSetup() {
                         setFileDividers(document.getElementById('file-result-container'));
                     });
                     showOrHideConfiguredFiles();
+                    document.getElementById('submit-button').disabled = false;
                 })
                 .catch(error => {
                     showUserInfo("Network error occurred. Please try again.");

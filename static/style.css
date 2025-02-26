@@ -172,6 +172,10 @@ button {
     background-color: #45a049;
 }
 
+#submit-button:disabled{
+    background-color: #8b958c;
+}
+
 .remove-file-button {
     display: flex;
     align-items: center;
