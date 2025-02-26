@@ -315,8 +315,7 @@ function fileNamesAreValid(){
         }
     }
     if(invalidNames.length > 0){
-        alert("Invalid file names:\n" + invalidNames.join('\n') + "\nvalid name example: ifcfg-interfacename or something.xml")
-        return false;
+        return confirm("Invalid file names:\n" + invalidNames.join('\n') + "\nvalid name example: ifcfg-<interfacename> ifroute-<name> or <name>.xml and might not be migratable.\nDo you want to continue anyways?")
     }
     else{
         return true;
