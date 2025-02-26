@@ -306,7 +306,7 @@ function downloadURL(url, name) {
 
 function fileNamesAreValid(){
     let invalidNames = []
-    let regex = /ifcfg-.+|ifroute-.+|routes|config|.+\.xml/i;
+    let regex = /ifcfg.+|ifroute-.+|routes|config|.+\.xml/i;
 
     for (let child of getFiles(document.getElementById('file-container'))) {
         let filename = child.querySelector('#file-name').value;
