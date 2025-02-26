@@ -12,16 +12,12 @@ pub enum FileType {
 impl FromStr for FileType {
     type Err = anyhow::Error;
     fn from_str(file_name: &str) -> Result<Self, Self::Err> {
-        if file_name.starts_with("ifroute") {
-            return Ok(FileType::Sysconfig);
-        }
-        if file_name.starts_with("ifcfg") {
-            return Ok(FileType::Sysconfig);
-        }
-        if file_name == "routes" {
-            return Ok(FileType::Sysconfig);
-        }
-        if file_name == "config" {
+        if file_name.starts_with("ifroute-")
+            || file_name.starts_with("ifcfg")
+            || file_name == "routes"
+            || file_name == "config"
+            || file_name == "dhcp"
+        {
             return Ok(FileType::Sysconfig);
         }
         if file_name.ends_with(".nmconnection") {
