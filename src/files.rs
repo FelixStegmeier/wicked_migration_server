@@ -5,6 +5,7 @@ use std::{fs, str::FromStr};
 pub enum FileType {
     Xml,
     Sysconfig,
+    NMconnection,
 }
 
 impl FromStr for FileType {
@@ -18,6 +19,9 @@ impl FromStr for FileType {
         }
         if file_name.contains("routes") {
             return Ok(FileType::Sysconfig);
+        }
+        if file_name.contains("nmconnection") {
+            return Ok(FileType::NMconnection);
         }
         Ok(FileType::Xml)
     }
@@ -70,13 +74,18 @@ pub fn file_arr_from_path(dir_path: String) -> Result<Vec<File>, anyhow::Error> 
         let path = dir_entry?.path();
         let file_type = match path.extension() {
             Some(file_type) => match file_type.to_str().unwrap() {
-                "xml" => FileType::Xml,
-                _ => FileType::Sysconfig,
+                "nmconnection" => FileType::NMconnection,
+                _ => {
+                    return Err(anyhow::anyhow!(
+                        "The returned file is not of type nmconnection"
+                    ))
+                }
             },
             None => {
-                return Err(anyhow::anyhow!(
-                    "There is no such file or file has no file extension"
-                ));
+                return Err(anyhow::anyhow!(format!(
+                    "The file path is poorly formatted: {}",
+                    path.to_string_lossy()
+                )));
             }
         };
 
