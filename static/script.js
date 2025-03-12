@@ -92,6 +92,7 @@ function pageSetup() {
             method: 'POST',
             body: formData,
         }).then(response => {
+            document.getElementById('submit-button').disabled = false;
             if (response.ok) {
                 response.json().then(json => {
                     clearFiles('file-result-container');
@@ -104,7 +105,6 @@ function pageSetup() {
                         setFileDividers(document.getElementById('file-result-container'));
                     });
                     showOrHideConfiguredFiles();
-                    document.getElementById('submit-button').disabled = false;
                 })
                 .catch(error => {
                     showUserInfo("Network error occurred. Please try again.");
