@@ -38,7 +38,7 @@ function pageSetup() {
     });
 
     document.getElementById('add-empty-file').addEventListener('click', function(event) {
-        createAndAddWickedFile() 
+        createAndAddWickedFile()
     });
 
     document.getElementById('reset-files-button').addEventListener('click', function(event) {
@@ -61,22 +61,14 @@ function pageSetup() {
         const fileElements = getFiles(document.getElementById('file-container'));
         const filesContent = getFilesContent(fileElements);
 
-        if(!fileNamesAreValid(fileElements)){
+        if (!fileNamesAreValid(fileElements) ||
+            !alertIfFileContainsPassword(fileElements) ||
+            !alertIfFileIsEmpty(fileElements) ||
+            !alertIfDuplicateFileName(fileElements)) {
             return;
         }
 
-        if(!alertIfFileContainsPassword(fileElements)){
-            return;
-        }
-
-        if(!alertIfFileIsEmpty(fileElements)){
-            return
-        }
-        if (!alertIfDuplicateFileName(fileElements)){
-            return;
-        }
-      
-        if (filesContent.length <= 0) {        
+        if (filesContent.length <= 0) {
             showUserInfo("Please add a file first");
             return;
         }
