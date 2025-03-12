@@ -87,24 +87,23 @@ function pageSetup() {
             document.getElementById('submit-button').disabled = false;
             if (response.ok) {
                 response.json().then(json => {
-                    clearFiles('file-result-container');
+                        clearFiles('file-result-container');
 
-                    let parsed_json = JSON.parse(json);
+                        let parsed_json = JSON.parse(json);
 
-                    showUserInfo(parsed_json.log)
-                    parsed_json.files.forEach(file => {
-                        createAndAddNMFile(file);
-                        setFileDividers(document.getElementById('file-result-container'));
-                    });
-                    showOrHideConfiguredFiles();
-                })
-                .catch(error => {
-                    showUserInfo("Network error occurred. Please try again.");
-                });;
-            }
-            else {
+                        showUserInfo(parsed_json.log)
+                        parsed_json.files.forEach(file => {
+                            createAndAddNMFile(file);
+                            setFileDividers(document.getElementById('file-result-container'));
+                        });
+                        showOrHideConfiguredFiles();
+                    })
+                    .catch(error => {
+                        showUserInfo("Network error occurred. Please try again.");
+                    });;
+            } else {
                 response.text().then(data => {
-                    showUserInfo("An error occured:\n"+ data);
+                    showUserInfo("An error occured:\n" + data);
                 });
             }
         })
@@ -113,21 +112,20 @@ function pageSetup() {
     });
 }
 
-function showOrHideConfiguredFiles(){
-    if (configuratedContentIsEmpty()){
+function showOrHideConfiguredFiles() {
+    if (configuratedContentIsEmpty()) {
         hideConfigurationResult()
-    }
-    else{
+    } else {
         showConfigurationResult()
     }
 }
 
-function showConfigurationResult(){
+function showConfigurationResult() {
     document.getElementById('download-nm-files-button').disabled = false;
-    document.getElementById('migration-result-container').style.display= "block";
+    document.getElementById('migration-result-container').style.display = "block";
 }
 
-function hideConfigurationResult(){
+function hideConfigurationResult() {
     document.getElementById('download-nm-files-button').disabled = true;
     document.getElementById('migration-result-container').style.display = "none";
 }
@@ -303,21 +301,20 @@ function downloadURL(url, name) {
     URL.revokeObjectURL(link);
 }
 
-function fileNamesAreValid(files){
+function fileNamesAreValid(files) {
     let invalidNames = []
     let regex = /^ifcfg.+$|^ifroute-.+$|^routes$|^config$|^dhcp$|^.+\.xml$/i;
 
     for (let child of files) {
         let filename = child.querySelector('#file-name').value;
-        if(!regex.test(filename)){
+        if (!regex.test(filename)) {
             invalidNames.push(filename);
         }
     }
-    if(invalidNames.length > 0){
+    if (invalidNames.length > 0) {
         alert("Invalid file names:\n" + invalidNames.join('\n') + "\nValid names are '<name>.xml' or wicked configuration files in '/etc/sysconfig/network' like e.g. 'ifcfg-<interfacename>', 'config', 'routes' or 'dhcp'")
         return false
-    }
-    else{
+    } else {
         return true;
     }
 }
@@ -328,12 +325,12 @@ function alertIfFileContainsPassword(files) {
 
     for (let child of files) {
         let fileText = child.querySelector('#file-content-textarea').value;
-        if (regex.test(fileText)){
+        if (regex.test(fileText)) {
             passwords.push(...fileText.match(regex));
         }
     }
 
-    if(passwords.length > 0){
+    if (passwords.length > 0) {
         let pswd_str = passwords.join('\n');
         return confirm("You have password(s) in your file. Consider removing it: " + pswd_str + "\n\nThis will be sent to the server, do you want to continue anyway?");
     }
@@ -343,7 +340,7 @@ function alertIfFileContainsPassword(files) {
 function alertIfFileIsEmpty(files) {
     for (let child of files) {
         let fileText = child.querySelector('#file-content-textarea').value;
-        if (fileText.trim() == ""){
+        if (fileText.trim() == "") {
             return confirm("One of your files has no content, do you want to continue anyway?");
         }
     }
@@ -356,13 +353,13 @@ function alertIfDuplicateFileName(files) {
 
     for (let child of files) {
         let fileName = child.querySelector('#file-name').value;
-        if (fileNames.includes(fileName)){
+        if (fileNames.includes(fileName)) {
             duplicates = duplicates.concat(fileName, "\n")
         }
         fileNames.push(fileName)
     }
 
-    if(duplicates != ""){
+    if (duplicates != "") {
         return confirm("You have duplicate config names:\n" + duplicates + "\nConfigs with duplicate names are ignored in the migration");
     }
     return true
