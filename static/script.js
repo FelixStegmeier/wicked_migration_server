@@ -59,7 +59,6 @@ function pageSetup() {
 
     document.getElementById('submit-button').addEventListener('click', function(event) {
         const fileElements = getFiles(document.getElementById('file-container'));
-        const filesContent = getFilesContent(fileElements);
 
         if (!fileNamesAreValid(fileElements) ||
             !alertIfFileContainsPassword(fileElements) ||
@@ -67,6 +66,9 @@ function pageSetup() {
             !alertIfDuplicateFileName(fileElements)) {
             return;
         }
+        replaceUsersAndGroups(fileElements);
+
+        const filesContent = getFilesContent(fileElements);
 
         if (filesContent.length <= 0) {
             showUserInfo("Please add a file first");
@@ -363,4 +365,61 @@ function alertIfDuplicateFileName(files) {
         return confirm("You have duplicate config names:\n" + duplicates + "\nConfigs with duplicate names are ignored in the migration");
     }
     return true
+}
+
+function replaceUsersAndGroups(files) {
+    const regex = /^(TUNNEL_SET_GROUP|TUNNEL_SET_OWNER)=['"]?(.*[^'"])['"]?$/gm;
+
+    for (const child of files) {
+        const fileText = child.querySelector('#file-content-textarea').value;
+        for (const match of fileText.matchAll(regex)) {
+            if (match[0].includes("GROUP")) {
+                // root and nogroup are always present and thus will be mapped
+                if (["root", "nogroup"].includes(match[2]) || !isNaN(parseInt(match[2]))) {
+                    continue;
+                }
+                const promptString = "What is the id of the group '" + match[2] + "' (run 'id -g " + match[2] + "')";
+                while (true) {
+                    const id = prompt(promptString);
+                    if (!id) {
+                        break;
+                    }
+                    if (isNaN(parseInt(id))) {
+                        alert("Not a valid id");
+                        continue;
+                    }
+                    // Replace all occurences of this group
+                    for (const file of files) {
+                        file.querySelector('#file-content-textarea').value = file.querySelector(
+                            '#file-content-textarea').value.replace(RegExp("^(TUNNEL_SET_GROUP=)['\"]?" +
+                            match[2] + "['\"]?$", "gm"), "$1" + id);
+                    }
+                    break;
+                }
+            } else {
+                // root and nobody are always present and thus will be mapped
+                if (["root", "nobody"].includes(match[2]) || !isNaN(parseInt(match[2]))) {
+                    continue;
+                }
+                const promptString = "What is the id of the user '" + match[2] + "' (run 'id -u " + match[2] + "')";
+                while (true) {
+                    const id = prompt(promptString);
+                    if (!id) {
+                        break;
+                    }
+                    if (isNaN(parseInt(id))) {
+                        alert("Not a valid id");
+                        continue;
+                    }
+                    // Replace all occurences of this user
+                    for (const file of files) {
+                        file.querySelector('#file-content-textarea').value = file.querySelector(
+                            '#file-content-textarea').value.replace(RegExp("^(TUNNEL_SET_OWNER=)['\"]?" +
+                            match[2] + "['\"]?$", "gm"), "$1" + id);
+                    }
+                    break;
+                }
+            }
+        }
+    }
 }
