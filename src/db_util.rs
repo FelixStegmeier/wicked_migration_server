@@ -1,4 +1,5 @@
 use rusqlite::Connection;
+use serde_json::json;
 use std::{
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
@@ -21,20 +22,14 @@ pub fn get_tar(uuid: &str, database: &Connection) -> anyhow::Result<String> {
 ///Creates a json even if args are left empty
 pub fn generate_json(uuid: &str, database: &Connection) -> anyhow::Result<String> {
     let path_log: (String, String) = read_from_db(uuid, database)?;
-
     let files = file_arr_from_path(path_log.0.clone())?;
+    let files_values: Vec<serde_json::Value> = files
+        .iter()
+        .map(|file| json!({"fileName": file.file_name, "fileContent": file.file_content}))
+        .collect();
+    let json = json!({"log": path_log.1, "files": files_values});
 
-    let mut data = json::JsonValue::new_object();
-    data["log"] = path_log.1.into();
-    data["files"] = json::JsonValue::new_array();
-    for file in files {
-        let mut file_data = json::JsonValue::new_object();
-        file_data["fileName"] = file.file_name.into();
-        file_data["fileContent"] = file.file_content.into();
-        data["files"].push(file_data).unwrap();
-    }
-
-    Ok(data.dump())
+    Ok(json.to_string())
 }
 
 pub fn create_db(db_path: &str) -> Connection {
